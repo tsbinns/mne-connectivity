@@ -13,6 +13,7 @@ import inspect
 from typing import Optional
 
 import numpy as np
+import scipy as sp
 from mne.epochs import BaseEpochs
 from mne.parallel import parallel_func
 from mne.utils import ProgressBar, logger
@@ -977,9 +978,10 @@ class _GCEstBase(_EpochMeanMultivariateConEstBase):
         <= pi.
 
         A note on efficiency: solving over the 4D time-freq. tensor is slower
-        than looping over times and freqs when n_times and n_freqs high, and
-        when n_times and n_freqs low, looping over times and freqs very fast
-        anyway (plus tensor solving doesn't allow for parallelisation).
+        & requires more memory than looping over times and freqs when n_times
+        and n_freqs high, and when n_times and n_freqs low, looping over times
+        and freqs quite fast anyway (plus tensor solving doesn't allow for
+        parallelisation).
 
         See: Barnett, L. & Seth, A.K., 2015, Physical Review, DOI:
         10.1103/PhysRevE.91.040101.
@@ -995,7 +997,6 @@ class _GCEstBase(_EpochMeanMultivariateConEstBase):
         parallel, parallel_compute_H, _ = parallel_func(
             _gc_compute_H, self.n_jobs, verbose=False
         )
-        H = np.zeros((h, t, n, n), dtype=np.complex128)
         for block_i in ProgressBar(range(self.n_steps), mesg="frequency blocks"):
             freqs = self._get_block_indices(block_i, self.n_freqs)
             H[freqs] = parallel(
@@ -1030,11 +1031,11 @@ def _gc_compute_H(A, C, K, z_k, I_n, I_m):
     See: Barnett, L. & Seth, A.K., 2015, Physical Review, DOI:
     10.1103/PhysRevE.91.040101, Eq. 4.
     """
-    from scipy import linalg  # XXX: is this necessary???
-
     H = np.zeros((A.shape[0], C.shape[1], C.shape[1]), dtype=np.complex128)
     for t in range(A.shape[0]):
-        H[t] = I_n + (C[t] @ linalg.lu_solve(linalg.lu_factor(z_k * I_m - A[t]), K[t]))
+        H[t] = I_n + (
+            C[t] @ sp.linalg.lu_solve(sp.linalg.lu_factor(z_k * I_m - A[t]), K[t])
+        )
 
     return H
 
