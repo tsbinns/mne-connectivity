@@ -13,6 +13,7 @@ from mne_connectivity import (
     SpectralConnectivity,
     make_signals_in_freq_bands,
     read_connectivity,
+    seed_target_indices,
     spectral_connectivity_epochs,
     spectral_connectivity_time,
 )
@@ -467,6 +468,66 @@ def test_spectral_connectivity(method, mode):
     assert out_lens[0] == 10
 
 
+@pytest.mark.parametrize("mode", ["multitaper", "fourier"])
+def test_spectral_connectivity_epochs_spectrum_input(mode):
+    """Test spec_conn_epochs works with EpochsSpectrum data as input."""
+    # Simulation parameters & data generation
+    sfreq = 100.0  # Hz
+    n_seeds = 2
+    n_targets = 2
+    fband = (15, 20)  # Hz
+    n_epochs = 30
+    n_times = 200  # samples
+    trans_bandwidth = 1.0  # Hz
+    delay = 10  # samples (non-zero delay needed for ImCoh and GC to be >> 0)
+
+    data = make_signals_in_freq_bands(
+        n_seeds=n_seeds,
+        n_targets=n_targets,
+        freq_band=fband,
+        n_epochs=n_epochs,
+        n_times=n_times,
+        sfreq=sfreq,
+        trans_bandwidth=trans_bandwidth,
+        snr=0.7,
+        connection_delay=delay,
+        rng_seed=44,
+    )
+
+    indices = seed_target_indices(
+        seeds=np.arange(n_seeds), targets=np.arange(n_targets) + n_seeds
+    )
+
+    # Compute Fourier coefficients
+    coeffs = data.compute_psd(
+        method="welch" if mode == "fourier" else mode, output="complex"
+    )
+
+    # Compute connectivity (just coherence)
+    con = spectral_connectivity_epochs(data=coeffs, method="coh", indices=indices)
+
+    # Check connectivity from Epochs and Spectrum are equivalent;
+    # Works for multitaper, but Welch of Spectrum and Fourier of spec_conn_epochs are
+    # different
+    if mode == "multitaper":
+        con_from_epochs = spectral_connectivity_epochs(
+            data=data, method="coh", indices=indices
+        )
+        # spec_conn_epochs excludes freqs without at least 5 cycles, but not Spectrum
+        fstart = con.freqs.index(con_from_epochs.freqs[0])
+        assert_allclose(con.get_data()[:, fstart:], con_from_epochs.get_data())
+
+    # Check connectivity values are as expected
+    freqs = np.array(con.freqs)
+    freqs_con = (freqs >= fband[0]) & (freqs <= fband[1])
+    freqs_noise = (freqs < fband[0] - trans_bandwidth * 2) | (
+        freqs > fband[1] + trans_bandwidth * 2
+    )
+
+    assert_array_less(0.6, con.get_data()[:, freqs_con])
+    assert_array_less(con.get_data()[:, freqs_noise], 0.2)
+
+
 _gc_marks = []
 if platform.system() == "Darwin" and platform.processor() == "arm":
     _gc_marks.extend(
@@ -527,7 +588,7 @@ def test_spectral_connectivity_epochs_multivariate(method, n_components):
     freqs = np.array(con.freqs)
     freqs_con = (freqs >= fstart) & (freqs <= fend)
     freqs_noise = (freqs < fstart - trans_bandwidth * 2) | (
-        freqs > fend + -trans_bandwidth * 2
+        freqs > fend + trans_bandwidth * 2
     )
 
     # Check connectivity scores are in expected range
