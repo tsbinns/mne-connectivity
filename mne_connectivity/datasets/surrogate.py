@@ -139,3 +139,37 @@ def _shuffle_coefficients(data, n_shuffles, rng_seed):
         # Package surrogate data for this shuffle
         state["data"] = surrogate_arr
         yield EpochsSpectrum(state, **defaults)  # return surrogate data as a generator
+
+
+def make_surrogate_data_alt(
+    data, n_shuffles=1000, rng_seed=None, return_generator=True
+):
+    """Create surrogate data for a null hypothesis of connectivity."""
+    surrogate = _shuffle_within_epochs(data, n_shuffles, rng_seed)
+    if not return_generator:
+        surrogate = [shuffle for shuffle in surrogate]
+
+    return surrogate
+
+
+def _shuffle_within_epochs(data, n_shuffles, rng_seed):
+    """Shuffle within epochs in data."""
+    from mne import EpochsArray
+
+    data_arr = data.get_data(copy=True)
+    rng = np.random.default_rng(rng_seed)
+    for _ in range(n_shuffles):
+        surr_arr = np.zeros_like(data_arr)
+        for ch_idx in range(data_arr.shape[1]):
+            surr_arr[:, ch_idx] = _swap_time_blocks(data_arr[:, ch_idx], rng)
+        yield EpochsArray(surr_arr, info=data.info)
+
+
+def _swap_time_blocks(data, rng):
+    """Swap time blocks in data."""
+    min_shift = 1
+    max_shift = data.shape[-1]
+    cut_at = rng.integers(min_shift, max_shift, 1)
+    surr = np.array_split(data, cut_at, axis=-1)
+    surr.reverse()
+    return np.concatenate(surr, axis=-1)
