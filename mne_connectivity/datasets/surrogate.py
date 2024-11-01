@@ -152,7 +152,7 @@ def make_surrogate_data_alt(
     return surrogate
 
 
-def _shuffle_within_epochs(data, n_shuffles, rng_seed):
+def _shuffle_within_epochs_OLD(data, n_shuffles, rng_seed):
     """Shuffle within epochs in data."""
     from mne import EpochsArray
 
@@ -165,11 +165,37 @@ def _shuffle_within_epochs(data, n_shuffles, rng_seed):
         yield EpochsArray(surr_arr, info=data.info)
 
 
-def _swap_time_blocks(data, rng):
+def _swap_time_blocks_OLD(data, rng):
     """Swap time blocks in data."""
     min_shift = 1
     max_shift = data.shape[-1]
     cut_at = rng.integers(min_shift, max_shift, 1)
     surr = np.array_split(data, cut_at, axis=-1)
+    surr.reverse()
+    return np.concatenate(surr, axis=-1)
+
+
+def _shuffle_within_epochs(data, n_shuffles, rng_seed):
+    """Shuffle within epochs in data."""
+    from mne import EpochsArray
+
+    data_arr = data.get_data(copy=True)
+    rng = np.random.default_rng(rng_seed)
+    for _ in range(n_shuffles):
+        surr_arr = np.zeros_like(data_arr)
+        cutpoints = rng.integers(
+            1, data_arr.shape[-1], (data_arr.shape[0], data_arr.shape[1])
+        )
+        for ev_idx in range(data_arr.shape[0]):
+            for ch_idx in range(data_arr.shape[1]):
+                surr_arr[ev_idx, ch_idx] = _swap_time_blocks(
+                    data_arr[ev_idx, ch_idx], cutpoints[ev_idx, ch_idx]
+                )
+        yield EpochsArray(surr_arr, info=data.info)
+
+
+def _swap_time_blocks(data, cut_at):
+    """Swap time blocks in data at a given cutpoint."""
+    surr = np.array_split(data, [cut_at], axis=-1)
     surr.reverse()
     return np.concatenate(surr, axis=-1)
