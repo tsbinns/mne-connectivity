@@ -21,8 +21,23 @@ from mne.viz.evoked import (
 def plot_spectral_connectivity(
     con,
     picks=None,
+    exclude="bads",
     info=None,
     node_aliases=None,
+    node_selection="seeds_and_targets",
+    node_width=None,
+    node_height=1.0,
+    node_linewidth=2.0,
+    node_colors="black",
+    node_edgecolor="white",
+    connection_colors="auto",
+    connection_colormap="turbo",
+    linewidth_lineplot=0.5,
+    linewidth_circleplot=1.5,
+    fontsize_names=8,
+    circleplot_padding=6.0,
+    xlim="tight",
+    highlight=None,
     interactive=True,
     show=True,
 ):
@@ -32,12 +47,27 @@ def plot_spectral_connectivity(
     _validate_type(con, SpectralConnectivity, "con", "SpectralConnectivity")
 
     return _plot_spectral_or_temporal_connectivity(
-        con,
-        picks,
-        info,
-        node_aliases,
-        interactive,
-        show,
+        con=con,
+        picks=picks,
+        exclude=exclude,
+        info=info,
+        node_aliases=node_aliases,
+        node_selection=node_selection,
+        node_width=node_width,
+        node_height=node_height,
+        node_linewidth=node_linewidth,
+        node_colors=node_colors,
+        node_edgecolor=node_edgecolor,
+        connection_colors=connection_colors,
+        connection_colormap=connection_colormap,
+        linewidth_lineplot=linewidth_lineplot,
+        linewidth_circleplot=linewidth_circleplot,
+        fontsize_names=fontsize_names,
+        circleplot_padding=circleplot_padding,
+        xlim=xlim,
+        highlight=highlight,
+        interactive=interactive,
+        show=show,
         xvar=con.freqs,
         xlabel="Frequency (Hz)",
     )
@@ -46,8 +76,23 @@ def plot_spectral_connectivity(
 def plot_temporal_connectivity(
     con,
     picks=None,
+    exclude="bads",
     info=None,
     node_aliases=None,
+    node_selection="seeds_and_targets",
+    node_width=None,
+    node_height=1.0,
+    node_linewidth=2.0,
+    node_colors="black",
+    node_edgecolor="white",
+    connection_colors="auto",
+    connection_colormap="turbo",
+    linewidth_lineplot=0.5,
+    linewidth_circleplot=1.5,
+    fontsize_names=8,
+    circleplot_padding=6.0,
+    xlim="tight",
+    highlight=None,
     interactive=True,
     show=True,
 ):
@@ -57,12 +102,27 @@ def plot_temporal_connectivity(
     _validate_type(con, TemporalConnectivity, "con", "TemporalConnectivity")
 
     return _plot_spectral_or_temporal_connectivity(
-        con,
-        picks,
-        info,
-        node_aliases,
-        interactive,
-        show,
+        con=con,
+        picks=picks,
+        exclude=exclude,
+        info=info,
+        node_aliases=node_aliases,
+        node_selection=node_selection,
+        node_width=node_width,
+        node_height=node_height,
+        node_linewidth=node_linewidth,
+        node_colors=node_colors,
+        node_edgecolor=node_edgecolor,
+        connection_colors=connection_colors,
+        connection_colormap=connection_colormap,
+        linewidth_lineplot=linewidth_lineplot,
+        linewidth_circleplot=linewidth_circleplot,
+        fontsize_names=fontsize_names,
+        circleplot_padding=circleplot_padding,
+        xlim=xlim,
+        highlight=highlight,
+        interactive=interactive,
+        show=show,
         xvar=con.times,
         xlabel="Times (s)",
     )
@@ -71,18 +131,57 @@ def plot_temporal_connectivity(
 def _plot_spectral_or_temporal_connectivity(
     con,
     picks,
+    exclude,
     info,
     node_aliases,
+    node_selection,
+    node_width,
+    node_height,
+    node_linewidth,
+    node_colors,
+    node_edgecolor,
+    connection_colors,
+    connection_colormap,
+    linewidth_lineplot,
+    linewidth_circleplot,
+    fontsize_names,
+    circleplot_padding,
+    xlim,
+    highlight,
     interactive,
     show,
     xvar,
     xlabel,
 ):
+    """Plot spectral/temporal connectivity as line plots with circle plot overviews."""
     _check_option("con.shape", len(con.shape), [2, 3], " length")
 
-    _validate_type(info, (mne.Info, None), "info", "mne.Info or None")
+    _validate_type(info, (mne.Info, None), "`info`", "mne.Info or None")
 
     _validate_type(node_aliases, (dict, None), "`node_aliases`", "dict or None")
+    _check_option(
+        "node_selection", node_selection, ["seeds_and_targets", "seeds", "targets"]
+    )
+
+    node_colors = [node_colors]  # downstream expects list
+
+    _check_option(
+        "connection_colors", connection_colors, ["auto", "global", "relative"]
+    )
+
+    if not isinstance(xlim, str):
+        _check_option("xlim", len(xlim), [2], " length")
+    else:
+        _check_option("xlim", xlim, ["tight"], " as a str")
+
+    _validate_type(highlight, ("array-like", None), "`highlight`", "array-like or None")
+    if highlight is not None:
+        _check_option("highlight", np.ndim(highlight), [1, 2], " number of dimensions")
+        if np.shape(highlight)[-1] != 2:
+            raise ValueError("`highlight` must have shape (2,) or (n, 2).")
+
+    _validate_type(interactive, bool, "`interactive`", "bool")
+    _validate_type(show, bool, "`show`", "bool")
 
     ch_names = con.names
     ch_info = _check_info(info, ch_names)
@@ -95,7 +194,7 @@ def _plot_spectral_or_temporal_connectivity(
     con_info = _get_con_info(ch_info, node_names, indices, is_multivar)
 
     # Get requested connections
-    picks = _picks_to_idx(info=con_info, picks=picks, none="all")
+    picks = _handle_picks(picks, exclude, ch_info, indices)
     data = data[picks]
     indices = (indices[0][picks], indices[1][picks])
     node_indices = (node_indices[0][picks], node_indices[1][picks])
@@ -120,16 +219,29 @@ def _plot_spectral_or_temporal_connectivity(
             node_names, type_node_indices
         )
         n_circle_nodes = len(circle_names)
-        # If plot is interactive and connectivity data is all-to-all, colouring works
-        # best if connections are duplicated such that all nodes are seeds and targets
-        duplicate_cons = is_all_to_all and interactive
+        node_is_selectable = _get_node_selectability(circle_indices, node_selection)
+        # If:
+        # - plot is interactive
+        # - connectivity data is (lower/upper-triangular) all-to-all
+        # - nodes as both seeds and targets in connections can be selected
+        # then colouring works best if connections are duplicated such that all nodes
+        # are seeds and targets
+        duplicate_cons = (
+            is_all_to_all and interactive and node_selection == "seeds_and_targets"
+        )
         if duplicate_cons:
             circle_indices = (
                 np.concatenate([circle_indices[0], circle_indices[1]]),
                 np.concatenate([circle_indices[1], circle_indices[0]]),
             )
+        if connection_colors == "auto":
+            type_connection_colors = (
+                "relative" if is_all_to_all and interactive else "global"
+            )
+        else:
+            type_connection_colors = connection_colors
         circle_con, circle_con_order = _get_circle_con(
-            circle_indices, n_circle_nodes, duplicate_cons
+            circle_indices, n_circle_nodes, type_connection_colors, node_selection
         )
 
         # Create figure and axes
@@ -142,16 +254,24 @@ def _plot_spectral_or_temporal_connectivity(
             con=circle_con,
             node_names=circle_names,
             indices=circle_indices,
-            node_colors="k",
+            node_width=node_width,
+            node_height=node_height,
+            node_colors=node_colors,
+            node_edgecolor=node_edgecolor,
+            node_linewidth=node_linewidth,
             facecolor="w",
             textcolor="k",
-            node_edgecolor="w",
-            colormap="turbo",
+            colormap=connection_colormap,
             colorbar=False,
+            linewidth=linewidth_circleplot,
+            fontsize_names=fontsize_names,
+            padding=circleplot_padding,
             ax=circle_ax,
             interactive=False,  # use our modified callback
+            title=f"Node selection\n({node_selection.replace('_', ' ')})",
             show=show,
         )
+        _set_node_alpha(circle_ax, node_is_selectable)
 
         # Plot connectivity as lines
         fig, line_ax = _plot_lines_connectivity(
@@ -162,14 +282,15 @@ def _plot_spectral_or_temporal_connectivity(
             duplicate_cons=duplicate_cons,
             fig=fig,
             ax=line_ax,
-            xlim=(xvar[0], xvar[-1]),
+            xlim=xlim,
             ylim=None,
             xvar=xvar,
             xlabel=xlabel,
             title=con_type,
             interactive=interactive,
             line_alpha=0.75,
-            highlight=None,
+            linewidth=linewidth_lineplot,
+            highlight=highlight,
         )
 
         # Add connectivity selection callback
@@ -181,8 +302,10 @@ def _plot_spectral_or_temporal_connectivity(
                 line_ax=line_ax,
                 indices=circle_indices,
                 node_angles=np.linspace(0, 2 * np.pi, n_circle_nodes, endpoint=False),
-                circle_con_order=circle_con_order,
                 duplicate_cons=duplicate_cons,
+                circle_con_order=circle_con_order,
+                node_selection=node_selection,
+                node_selectability=node_is_selectable,
             )
             fig.canvas.mpl_connect("button_press_event", callback)
 
@@ -311,16 +434,24 @@ def _get_con_info(ch_info, node_names, indices, is_multivar):
             )
             con_types.append(f"{', '.join(seed_types)} → {', '.join(target_types)}")
 
-    con_info = mne.create_info(
-        ch_names=con_names,
-        sfreq=1.0,
-        ch_types="eeg",  # use a valid data type instead of misc
-    )
+    con_info = mne.create_info(ch_names=con_names, sfreq=1.0, ch_types="misc")
     # Can't store connectivity types in ch_types as they are not recognised
     con_info["temp"] = dict()
     con_info["temp"]["con_types"] = np.array(con_types)
 
     return con_info
+
+
+def _handle_picks(picks, exclude, ch_info, indices):
+    """Handle picks for connectivity data."""
+    ch_picks = _picks_to_idx(info=ch_info, picks=picks, exclude=exclude)
+    con_picks = []
+    for con_idx, (seed, target) in enumerate(zip(*indices)):
+        seed, target = np.asarray(seed), np.asarray(target)
+        if np.any(seed in ch_picks) or np.any(target in ch_picks):
+            con_picks.append(con_idx)
+
+    return con_picks
 
 
 def _add_comps_as_connections(data, con_info, comps_axis):
@@ -350,18 +481,35 @@ def _get_circle_names_and_indices(node_names, node_indices):
     circle_indices = [np.searchsorted(unique_nodes, ind) for ind in node_indices]
 
     is_all_to_all = np.all(
-        np.all(ind == all_to_all_ind)
-        for ind, all_to_all_ind in zip(
-            circle_indices, np.tril_indices(len(circle_names), -1)
+        list(
+            np.all(ind == all_to_all_ind) or np.all(ind == all_to_all_ind.T)
+            for ind, all_to_all_ind in zip(
+                circle_indices, np.tril_indices(len(circle_names), -1)
+            )
         )
     )  # check if all-to-all connectivity
 
     return circle_names, circle_indices, is_all_to_all
 
 
-def _get_circle_con(circle_indices, n_nodes, is_all_to_all):
+def _get_node_selectability(circle_indices, node_selection):
+    """Get selectability of nodes in circle plot based on node selection type."""
+    n_unique_nodes = len(np.unique(np.r_[circle_indices[0], circle_indices[1]]))
+    if node_selection == "seeds_and_targets":
+        node_selectability = [True] * n_unique_nodes
+    else:
+        if node_selection == "seeds":
+            relevant_indices = circle_indices[0]
+        else:  # node_selection == "targets"
+            relevant_indices = circle_indices[1]
+        node_selectability = [idx in relevant_indices for idx in range(n_unique_nodes)]
+
+    return node_selectability
+
+
+def _get_circle_con(circle_indices, n_nodes, connection_colors, node_selection):
     """Get connectivity values for circle plot (determines colour)."""
-    if is_all_to_all:  # values span colourbar per node
+    if connection_colors == "relative":  # values span colourbar per node
         node_angles = np.linspace(0, 2 * np.pi, n_nodes, endpoint=False)
         circle_con = np.zeros(len(circle_indices[0]))
         for con_idx, (seed, target) in enumerate(zip(*circle_indices)):
@@ -369,6 +517,17 @@ def _get_circle_con(circle_indices, n_nodes, is_all_to_all):
             if node_diff > 0:
                 node_diff -= 2 * np.pi
             circle_con[con_idx] = np.abs(node_diff)
+        # Normalise values for different number of connections per node
+        if node_selection != "seeds_and_targets":
+            consider_indices = (
+                circle_indices[0] if node_selection == "seeds" else circle_indices[1]
+            )
+            for node_idx in range(n_nodes):
+                node_mask = consider_indices == node_idx
+                if np.any(node_mask):
+                    circle_con[node_mask] -= circle_con[node_mask].min()
+                    if circle_con[node_mask].size > 1:  # avoid division by zero
+                        circle_con[node_mask] /= circle_con[node_mask].max()
     else:  # values span colourbar over all connections
         circle_con = circle_indices[0] + circle_indices[1]
 
@@ -377,6 +536,14 @@ def _get_circle_con(circle_indices, n_nodes, is_all_to_all):
     circle_con_order = np.argsort(circle_con)  # to map cons in circle plot to indices
 
     return circle_con, circle_con_order
+
+
+def _set_node_alpha(circle_ax, node_is_selectable):
+    """Set alpha of nodes in circle plot based on selectability."""
+    for node_idx, node_selectable in enumerate(node_is_selectable):
+        node_patch = circle_ax.containers[0][node_idx]
+        if not node_selectable:
+            node_patch.set_alpha(0.3)
 
 
 def _get_con_colors(circle_ax, circle_con_order):
@@ -398,6 +565,8 @@ def _plot_connectivity_circle_onpick(
     node_angles,
     duplicate_cons,
     circle_con_order,
+    node_selection,
+    node_selectability,
     ylim=(9, 10),
 ):
     """Isolate connections for a single node and reflect this in the line plot.
@@ -419,10 +588,21 @@ def _plot_connectivity_circle_onpick(
         # all angles in range [0, 2*pi]
         node_angles = node_angles % (np.pi * 2)
         node = np.argmin(np.abs(event.xdata - node_angles))
+        if not node_selectability[node]:
+            return  # ignore click if node not selectable
+
+        for text in line_ax.texts:
+            text.set_alpha(0)  # hide any connection labels
 
         for circle_idx, line_idx in enumerate(circle_con_order):
             seed, target = indices[0][line_idx], indices[1][line_idx]
-            visible = node == seed if duplicate_cons else node in (seed, target)
+            if node_selection == "seeds_and_targets":
+                viable_nodes = [seed, target] if not duplicate_cons else [seed]
+            elif node_selection == "seeds":
+                viable_nodes = [seed]
+            else:  # node_selection == "targets"
+                viable_nodes = [target]
+            visible = node in viable_nodes
             patches[circle_idx].set_visible(visible)
             lines[line_idx].set_visible(visible)
             lines[line_idx].set_picker(0 if not visible else True)
@@ -469,6 +649,7 @@ def _plot_lines_connectivity(
     title,
     interactive,
     line_alpha,
+    linewidth,
     highlight,
 ):
     """Plot data as butterfly plot."""
@@ -506,11 +687,11 @@ def _plot_lines_connectivity(
             ax.plot(
                 xvar,
                 data[con_idx],
-                picker=True,
+                picker=interactive,
                 zorder=z + 1,
                 color=con_colors[con_idx],
                 alpha=line_alpha,
-                linewidth=0.5,
+                linewidth=linewidth,
             )[0]
         )
         lines[-1].set_pickradius(3.0)
@@ -520,11 +701,11 @@ def _plot_lines_connectivity(
                 ax.plot(
                     xvar,
                     data[con_idx],
-                    picker=True,
+                    picker=interactive,
                     zorder=z + 1,
                     color=con_colors[con_idx + n_cons],
                     alpha=line_alpha,
-                    linewidth=0.5,
+                    linewidth=linewidth,
                 )[0]
             )
             lines[-1].set_pickradius(3.0)
