@@ -268,7 +268,11 @@ def _plot_spectral_or_temporal_connectivity(
             padding=circleplot_padding,
             ax=circle_ax,
             interactive=False,  # use our modified callback
-            title=f"Node selection\n({node_selection.replace('_', ' ')})",
+            title=(
+                f"Node selection\n({node_selection.replace('_', ' ')})"
+                if interactive
+                else "Nodes"
+            ),
             show=show,
         )
         _set_node_alpha(circle_ax, node_is_selectable)
