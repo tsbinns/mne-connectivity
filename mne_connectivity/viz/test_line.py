@@ -24,8 +24,42 @@ con = spectral_connectivity_epochs(epochs, method="imcoh", fmax=40)
 con = SpectralConnectivity(
     np.abs(con.get_data()), con.freqs, con.n_nodes, con.names, con.indices
 )
+MULTIVAR = True
+if MULTIVAR:
+    con = SpectralConnectivity(
+        np.concatenate(
+            (
+                np.concatenate(
+                    [
+                        con.get_data().mean(0, keepdims=True)[:, None, :],
+                        con.get_data().mean(0, keepdims=True)[:, None, :] * 0.5,
+                    ],
+                    axis=1,
+                ),
+                np.concatenate(
+                    [
+                        con.get_data().mean(0, keepdims=True)[:, None, :] * -1,
+                        con.get_data().mean(0, keepdims=True)[:, None, :] * -0.5,
+                    ],
+                    axis=1,
+                ),
+            ),
+            axis=0,
+        ),
+        con.freqs,
+        con.n_nodes,
+        con.names,
+        indices=(
+            np.array((np.arange(0, 10), np.arange(10, 20))),
+            np.array((np.arange(0, 10), np.arange(10, 20))),
+        ),
+        components=np.arange(2),
+    )
 
-fig = plot_spectral_connectivity(con, info=epochs.info, show=False)
+fig = plot_spectral_connectivity(
+    con, info=epochs.info, picks=None, node_selection="seeds_and_targets", show=False
+)
+
 
 plt.show(block=True)
 
