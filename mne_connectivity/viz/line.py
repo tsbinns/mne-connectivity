@@ -191,10 +191,10 @@ def _plot_spectral_or_temporal_connectivity(
     node_names, node_indices = _get_node_names_and_indices(
         ch_names, node_aliases, indices, is_multivar
     )
-    con_info = _get_con_info(ch_info, node_names, indices, is_multivar)
+    con_info = _get_con_info(ch_info, node_names, indices, node_indices, is_multivar)
 
     # Get requested connections
-    picks = _handle_picks(picks, exclude, ch_info, indices)
+    picks = _handle_picks(picks, exclude, ch_info, indices, is_multivar)
     data = data[picks]
     indices = (indices[0][picks], indices[1][picks])
     node_indices = (node_indices[0][picks], node_indices[1][picks])
@@ -203,7 +203,9 @@ def _plot_spectral_or_temporal_connectivity(
 
     # Add multivariate components as additional connections
     if data.ndim == 3:
-        data, con_info = _add_comps_as_connections(data, con_info, comps_axis=1)
+        data, con_info, node_indices = _add_comps_as_connections(
+            data, con_info, node_indices, comps_axis=1
+        )
 
     con_types = con_info["temp"]["con_types"]
     figs = []
@@ -214,75 +216,86 @@ def _plot_spectral_or_temporal_connectivity(
         type_con_names = np.array(con_info["ch_names"])[type_mask]
         type_node_indices = tuple(idcs[type_mask] for idcs in node_indices)
 
-        # Prepare circle plot values
-        circle_names, circle_indices, is_all_to_all = _get_circle_names_and_indices(
-            node_names, type_node_indices
-        )
-        n_circle_nodes = len(circle_names)
-        node_is_selectable = _get_node_selectability(circle_indices, node_selection)
-        # If:
-        # - plot is interactive
-        # - connectivity data is (lower/upper-triangular) all-to-all
-        # - nodes as both seeds and targets in connections can be selected
-        # then colouring works best if connections are duplicated such that all nodes
-        # are seeds and targets
-        duplicate_cons = (
-            is_all_to_all and interactive and node_selection == "seeds_and_targets"
-        )
-        if duplicate_cons:
-            circle_indices = (
-                np.concatenate([circle_indices[0], circle_indices[1]]),
-                np.concatenate([circle_indices[1], circle_indices[0]]),
-            )
-        if connection_colors == "auto":
-            type_connection_colors = (
-                "relative" if is_all_to_all and interactive else "global"
-            )
-        else:
-            type_connection_colors = connection_colors
-        circle_con, circle_con_order = _get_circle_con(
-            circle_indices, n_circle_nodes, type_connection_colors, node_selection
-        )
-
         # Create figure and axes
         fig = plt.figure(figsize=(15, 5), facecolor="w", layout="constrained")
-        line_ax = fig.add_subplot(1, 3, (1, 2))
-        circle_ax = fig.add_subplot(1, 3, 3, polar=True)
+        plot_circle = True
+        line_subplot_idx = (1, 2)
+        if len(type_node_indices[0]) == 1:
+            plot_circle = False  # don't plot circle for a single connection
+            line_subplot_idx = (1, 3)
+        line_ax = fig.add_subplot(1, 3, line_subplot_idx)
+        circle_ax = None
+        if plot_circle:
+            # Prepare circle plot values
+            circle_names, circle_indices, is_all_to_all = _get_circle_names_and_indices(
+                node_names, type_node_indices
+            )
+            n_circle_nodes = len(circle_names)
+            node_is_selectable = _get_node_selectability(circle_indices, node_selection)
+            # If:
+            # - plot is interactive
+            # - connectivity data is (lower/upper-triangular) all-to-all
+            # - nodes as both seeds and targets in connections can be selected
+            # then colouring works best if connections are duplicated such that all
+            # nodes are seeds and targets
+            duplicate_cons = (
+                is_all_to_all and interactive and node_selection == "seeds_and_targets"
+            )
+            if duplicate_cons:
+                circle_indices = (
+                    np.concatenate([circle_indices[0], circle_indices[1]]),
+                    np.concatenate([circle_indices[1], circle_indices[0]]),
+                )
+            if connection_colors == "auto":
+                type_connection_colors = (
+                    "relative" if is_all_to_all and interactive else "global"
+                )
+            else:
+                type_connection_colors = connection_colors
+            circle_con, circle_con_order = _get_circle_con(
+                circle_indices, n_circle_nodes, type_connection_colors, node_selection
+            )
 
-        # Plot connectivity as circle
-        fig, circle_ax = _plot_connectivity_circle(
-            con=circle_con,
-            node_names=circle_names,
-            indices=circle_indices,
-            node_width=node_width,
-            node_height=node_height,
-            node_colors=node_colors,
-            node_edgecolor=node_edgecolor,
-            node_linewidth=node_linewidth,
-            facecolor="w",
-            textcolor="k",
-            colormap=connection_colormap,
-            colorbar=False,
-            linewidth=linewidth_circleplot,
-            fontsize_names=fontsize_names,
-            padding=circleplot_padding,
-            ax=circle_ax,
-            interactive=False,  # use our modified callback
-            title=(
-                f"Node selection\n({node_selection.replace('_', ' ')})"
-                if interactive
-                else "Nodes"
-            ),
-            show=show,
-        )
-        _set_node_alpha(circle_ax, node_is_selectable)
+            circle_ax = fig.add_subplot(1, 3, 3, polar=True)
+
+            # Plot connectivity as circle
+            fig, circle_ax = _plot_connectivity_circle(
+                con=circle_con,
+                node_names=circle_names,
+                indices=circle_indices,
+                node_width=node_width,
+                node_height=node_height,
+                node_colors=node_colors,
+                node_edgecolor=node_edgecolor,
+                node_linewidth=node_linewidth,
+                facecolor="w",
+                textcolor="k",
+                colormap=connection_colormap,
+                colorbar=False,
+                linewidth=linewidth_circleplot,
+                fontsize_names=fontsize_names,
+                padding=circleplot_padding,
+                ax=circle_ax,
+                interactive=False,  # use our modified callback
+                title=(
+                    f"Node selection\n({node_selection.replace('_', ' ')})"
+                    if interactive
+                    else "Nodes"
+                ),
+                show=show,
+            )
+            _set_node_alpha(circle_ax, node_is_selectable)
+            con_colors = _get_con_colors(circle_ax, circle_con_order)
+        else:
+            con_colors = "k"
+            duplicate_cons = False
 
         # Plot connectivity as lines
         fig, line_ax = _plot_lines_connectivity(
             data=type_data,
-            con_colors=_get_con_colors(circle_ax, circle_con_order),
+            con_colors=con_colors,
             con_names=type_con_names,
-            n_nodes=n_circle_nodes,
+            n_nodes=len(type_con_names),
             duplicate_cons=duplicate_cons,
             fig=fig,
             ax=line_ax,
@@ -298,7 +311,7 @@ def _plot_spectral_or_temporal_connectivity(
         )
 
         # Add connectivity selection callback
-        if interactive:
+        if plot_circle and interactive:
             callback = partial(
                 _plot_connectivity_circle_onpick,
                 fig=fig,
@@ -314,7 +327,7 @@ def _plot_spectral_or_temporal_connectivity(
             fig.canvas.mpl_connect("button_press_event", callback)
 
         # Hide duplicate connections initially
-        if duplicate_cons:
+        if plot_circle and duplicate_cons:
             _hide_duplicate_cons(
                 fig, circle_ax, line_ax, len(type_data), circle_con_order
             )
@@ -359,7 +372,10 @@ def _handle_data_and_indices(con, ch_info):
             data = data[good_con_mask]
             indices = (indices[0][good_con_mask], indices[1][good_con_mask])
         elif len(bad_idcs) > 0 and is_multivar:
-            indices = (np.delete(indices[0], bad_idcs), np.delete(indices[1], bad_idcs))
+            indices = (
+                np.delete(indices[0][0], bad_idcs),
+                np.delete(indices[1][0], bad_idcs),
+            )
 
     else:
         assert indices == "symmetric"
@@ -390,19 +406,25 @@ def _get_node_names_and_indices(ch_names, node_aliases, indices, is_multivar):
     """Get/create names of seeds/targets in connections and their indices."""
     if node_aliases is None:
         node_aliases = dict()
-    if any(idx not in (*indices[0], *indices[1]) for idx in node_aliases.keys()):
+    if any(
+        idx not in np.array((*indices[0], *indices[1])) for idx in node_aliases.keys()
+    ):
         raise ValueError("All keys in `node_aliases` must be present in `con.indices`.")
 
     # Get names of nodes (via aliases, directly, or create for multivar connections)
-    unique_nodes = np.unique([*indices[0], *indices[1]]).tolist()
-    node_names = [None] * len(ch_names)
-    for node_idx in unique_nodes:
-        if node_idx in node_aliases.keys():
-            node_names[node_idx] = node_aliases[node_idx]
+    if not is_multivar:
+        unique_nodes = np.unique([*indices[0], *indices[1]]).tolist()
+        node_names = [None] * len(ch_names)
+    else:
+        unique_nodes = list(set([tuple(ind) for ind in (*indices[0], *indices[1])]))
+        node_names = [None] * len(indices[0])
+    for node_idx, node_ind in enumerate(unique_nodes):
+        if node_ind in node_aliases.keys():
+            node_names[node_idx] = node_aliases[node_ind]
         elif not is_multivar:
-            node_names[node_idx] = ch_names[node_idx]
+            node_names[node_idx] = ch_names[node_ind]
         else:
-            node_names[node_idx] = ",".join([ch_names[ch_idx] for ch_idx in node_idx])
+            node_names[node_idx] = f"node {node_idx}"
 
     # Get indices in terms of node_names entries
     if not is_multivar:  # just use original indices
@@ -410,16 +432,17 @@ def _get_node_names_and_indices(ch_names, node_aliases, indices, is_multivar):
     else:  # get indices in terms of unique nodes
         node_indices = ([], [])
         for seed, target in zip(*indices):
-            node_indices[0].append(unique_nodes.index(seed))
-            node_indices[1].append(unique_nodes.index(target))
+            node_indices[0].append(np.where((unique_nodes == seed).all(axis=1))[0][0])
+            node_indices[1].append(np.where((unique_nodes == target).all(axis=1))[0][0])
+        node_indices = (np.array(node_indices[0]), np.array(node_indices[1]))
 
     return node_names, node_indices
 
 
-def _get_con_info(ch_info, node_names, indices, is_multivar):
+def _get_con_info(ch_info, node_names, indices, node_indices, is_multivar):
     """Create info object for connectivity data."""
     con_names = []
-    for seed, target in zip(*indices):
+    for seed, target in zip(*node_indices):
         con_names.append(f"{node_names[seed]} → {node_names[target]}")
 
     ch_types = ch_info.get_channel_types()
@@ -446,27 +469,34 @@ def _get_con_info(ch_info, node_names, indices, is_multivar):
     return con_info
 
 
-def _handle_picks(picks, exclude, ch_info, indices):
+def _handle_picks(picks, exclude, ch_info, indices, is_multivar):
     """Handle picks for connectivity data."""
     ch_picks = _picks_to_idx(info=ch_info, picks=picks, exclude=exclude)
     con_picks = []
     for con_idx, (seed, target) in enumerate(zip(*indices)):
-        seed, target = np.asarray(seed), np.asarray(target)
-        if np.any(seed in ch_picks) or np.any(target in ch_picks):
+        if not is_multivar:
+            seed, target = [seed], [target]
+        if np.any([ch in ch_picks for ch in seed]) or np.any(
+            [ch in ch_picks for ch in target]
+        ):
             con_picks.append(con_idx)
 
     return con_picks
 
 
-def _add_comps_as_connections(data, con_info, comps_axis):
+def _add_comps_as_connections(data, con_info, node_indices, comps_axis):
     """Add multivariate components as additional connections."""
     n_comps = data.shape[comps_axis]
-    data = np.reshape(data, data.shape[0] * n_comps, -1)
+    data = np.reshape(data, (data.shape[0] * n_comps, -1))
+    node_indices = (
+        np.repeat(node_indices[0], n_comps),
+        np.repeat(node_indices[1], n_comps),
+    )
 
     new_con_names = []
     for con_name in con_info["ch_names"]:
         new_con_names.extend(
-            [f"{con_name} (component {comp + 1})" for comp in range(n_comps)]
+            [f"{con_name} (component {comp})" for comp in range(n_comps)]
         )
     new_con_types = np.repeat(con_info["temp"]["con_types"], n_comps)
 
@@ -474,7 +504,7 @@ def _add_comps_as_connections(data, con_info, comps_axis):
         con_info["ch_names"] = new_con_names
     con_info["temp"]["con_types"] = new_con_types
 
-    return data, con_info
+    return data, con_info, node_indices
 
 
 def _get_circle_names_and_indices(node_names, node_indices):
@@ -484,14 +514,18 @@ def _get_circle_names_and_indices(node_names, node_indices):
 
     circle_indices = [np.searchsorted(unique_nodes, ind) for ind in node_indices]
 
-    is_all_to_all = np.all(
-        list(
-            np.all(ind == all_to_all_ind) or np.all(ind == all_to_all_ind.T)
-            for ind, all_to_all_ind in zip(
-                circle_indices, np.tril_indices(len(circle_names), -1)
-            )
-        )
-    )  # check if all-to-all connectivity
+    is_all_to_all = []  # check if all-to-all connectivity
+    for ind, all_to_all_ind in zip(
+        circle_indices, np.tril_indices(len(circle_names), -1)
+    ):
+        if len(ind) != len(all_to_all_ind):
+            is_all_to_all.append(False)
+            break
+        if not (np.all(ind == all_to_all_ind) or np.all(ind == all_to_all_ind.T)):
+            is_all_to_all.append(False)
+            break
+        is_all_to_all.append(True)
+    is_all_to_all = all(is_all_to_all)
 
     return circle_names, circle_indices, is_all_to_all
 
@@ -739,7 +773,7 @@ def _plot_lines_connectivity(
     ax.set(
         title=(
             f"{title} ({n_cons} connection{_pl(n_cons)} "
-            f"between {n_nodes} node{_pl(n_nodes)})"
+            f"from {n_nodes} node{_pl(n_nodes)})"
         )
     )
 
