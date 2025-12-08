@@ -416,17 +416,16 @@ def _get_node_names_and_indices(ch_names, node_aliases, indices, is_multivar):
     # Get names of nodes (via aliases, directly, or create for multivar connections)
     if not is_multivar:
         unique_nodes = np.unique([*indices[0], *indices[1]]).tolist()
-        node_names = [None] * len(ch_names)
+        node_names = ch_names
+        for node_ind in unique_nodes:
+            if node_ind in node_aliases.keys():
+                node_names[node_ind] = node_aliases[node_ind]
     else:
         unique_nodes = list(set([tuple(ind) for ind in (*indices[0], *indices[1])]))
-        node_names = [None] * len(indices[0])
-    for node_idx, node_ind in enumerate(unique_nodes):
-        if node_ind in node_aliases.keys():
-            node_names[node_idx] = node_aliases[node_ind]
-        elif not is_multivar:
-            node_names[node_idx] = ch_names[node_ind]
-        else:
-            node_names[node_idx] = f"node {node_idx}"
+        node_names = [f"node {node_idx}" for node_idx in range(len(unique_nodes))]
+        for node_idx, node_ind in enumerate(unique_nodes):
+            if node_ind in node_aliases.keys():
+                node_names[node_idx] = node_aliases[node_ind]
 
     # Get indices in terms of node_names entries
     if not is_multivar:  # just use original indices
