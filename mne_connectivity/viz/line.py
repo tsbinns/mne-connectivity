@@ -348,6 +348,8 @@ def _handle_data_and_indices(con, ch_info):
             [np.issubdtype(type(ind), int) for ind in indices[0]]
         ) and not np.all([np.issubdtype(type(ind), int) for ind in indices[1]]):
             is_multivar = True
+        if not is_multivar:
+            indices = (np.array(indices[0]), np.array(indices[1]))
 
     elif indices is None or indices == "all":  # All-to-all connectivity
         # Construct explicit indices
