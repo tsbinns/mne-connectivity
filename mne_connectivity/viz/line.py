@@ -472,7 +472,7 @@ def _get_con_info(ch_info, node_names, indices, node_indices, is_multivar):
 
 def _handle_picks(picks, exclude, ch_info, indices, is_multivar):
     """Handle picks for connectivity data."""
-    ch_picks = _picks_to_idx(info=ch_info, picks=picks, exclude=exclude)
+    ch_picks = _picks_to_idx(info=ch_info, picks=picks, none="all", exclude=exclude)
     con_picks = []
     for con_idx, (seed, target) in enumerate(zip(*indices)):
         if not is_multivar:
