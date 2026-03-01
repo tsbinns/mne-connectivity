@@ -1,11 +1,10 @@
 import mne
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.colors import Normalize
 from mne._fiff.pick import pick_info
 from mne.utils.check import _check_option, _validate_type
 from mne.utils.misc import _pl
-
-from mne_connectivity import Connectivity
 
 from .helpers import (
     _add_comps_as_connections,
@@ -18,14 +17,19 @@ from .helpers import (
 )
 
 
+# TODO: Add masking support
+# TODO: Fix overlapping labels when many channels are plotted
 def plot_connectivity(
     con,
     picks=None,
     exclude="bads",
     info=None,
     node_aliases=None,
-    colorbar=True,
+    vmin=None,
+    vmax=None,
+    cnorm=None,
     cmap="viridis",
+    colorbar=True,
     show=True,
 ):
     """Plot connectivity as a matrix.
@@ -59,13 +63,24 @@ def plot_connectivity(
         and plotting results for multivariate connectivity, node names will be generated
         as ``'node {idx}'``, where ``idx`` is the order of the node in the unique set of
         indices, as determined by ``np.unique([*con.indices[0], *con.indices[1]])``.
+    vmin : float | None (default None)
+        Minimum value for the colormap. If ``None``, it is determined automatically.
+    vmax : float | None (default None)
+        Maximum value for the colormap. If ``None``, it is determined automatically.
+    cnorm : matplotlib.colors.Normalize | None
+        How to normalize the colormap. If ``None``, standard linear normalization is
+        performed. If not ``None``, ``vmin`` and ``vmax`` will be ignored. See
+        :ref:`Matplotlib docs <matplotlib:colormapnorms>` for more details on colormap
+        normalization.
     colorbar : bool (default True)
-        Whether to display a colorbar.
+        Whether to display a colorbar for each figure.
     cmap : str | instance of matplotlib.colors.Colormap (default "viridis")
         The colormap to use for coloring the connectivity values.
     show : bool (default True)
-        Whether to show the figure.
+        Whether to show the figure(s).
     """
+    from mne_connectivity import Connectivity
+
     _validate_type(con, Connectivity, "con", "Connectivity")
 
     _check_data_is_real(con.get_data())
@@ -114,13 +129,19 @@ def plot_connectivity(
         square_matrix = np.full((type_n_nodes, type_n_nodes), fill_value=np.nan)
         for idx, (seed_idx, target_idx) in enumerate(zip(*type_node_indices)):
             square_matrix[seed_idx, target_idx] = data[idx]
+        if vmin is None:
+            vmin = np.nanmin(square_matrix)
+        if vmax is None:
+            vmax = np.nanmax(square_matrix)
+        if cnorm is None:
+            cnorm = Normalize(vmin=vmin, vmax=vmax)
 
         # Create figure and axis
         fig, ax = plt.subplots(
             1, 1, figsize=(6, 6), facecolor="w", layout="constrained"
         )
 
-        ax.imshow(square_matrix, cmap=cmap)
+        ax.imshow(square_matrix, cmap=cmap, norm=cnorm)
         if colorbar:
             fig.colorbar(ax.images[0], ax=ax, shrink=0.6, label="Connectivity (A.U.)")
 
