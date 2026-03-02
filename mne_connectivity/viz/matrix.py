@@ -18,7 +18,7 @@ from .helpers import (
 
 
 # TODO: Add masking support
-# TODO: Fix overlapping labels when many channels are plotted
+# TODO: Could there be interactivity to show con names on click?
 def plot_connectivity(
     con,
     picks=None,
@@ -30,6 +30,7 @@ def plot_connectivity(
     cnorm=None,
     cmap="viridis",
     colorbar=True,
+    node_labels="ticks",
     show=True,
 ):
     """Plot connectivity as a matrix.
@@ -76,8 +77,21 @@ def plot_connectivity(
         Whether to display a colorbar for each figure.
     cmap : str | instance of matplotlib.colors.Colormap (default "viridis")
         The colormap to use for coloring the connectivity values.
+    node_labels : ``'names'`` | ``'ticks'`` | None (default ``'ticks'``)
+        How to label the nodes in the matrix along the x- and y-axes. If ``'names'``,
+        each node's name is shown. Note that for many nodes, this can lead to
+        overlapping labels. If ``'ticks'``, the indices of the nodes are shown at evenly
+        spaced intervals. Note that for many nodes, not all may have labels. If
+        ``None``, no labels are shown.
     show : bool (default True)
         Whether to show the figure(s).
+
+    Notes
+    -----
+    Plotting for multivariate connectivity is handled by treating each component of the
+    multivariate connections as a separate connection. The names of the nodes are
+    differentiated by the addition of the component number to the node name, e.g.,
+    ``'node 0 (component 0)', 'node 0 (component 1)', ...``.
     """
     from mne_connectivity import Connectivity
 
@@ -88,6 +102,8 @@ def plot_connectivity(
     _check_option("con.shape", len(con.shape), [1, 2], " length")
 
     _validate_type(info, (mne.Info, None), "`info`", "mne.Info or None")
+
+    _check_option("node_labels", node_labels, ["names", "ticks", None])
 
     ch_names = con.names
     con_method = con.method if con.method is not None else "connectivity"
@@ -151,10 +167,15 @@ def plot_connectivity(
         )
         ax.set_xlabel("Targets")
         ax.set_ylabel("Seeds")
-        ax.set_xticks(np.arange(type_n_nodes))
-        ax.set_yticks(np.arange(type_n_nodes))
-        ax.set_xticklabels(type_node_names, rotation=90)
-        ax.set_yticklabels(type_node_names)
+        if node_labels == "names":
+            ax.set_xticks(np.arange(type_n_nodes))
+            ax.set_yticks(np.arange(type_n_nodes))
+            ax.set_xticklabels(type_node_names, rotation=90)
+            ax.set_yticklabels(type_node_names)
+        elif node_labels is None:
+            ax.set_xticks([])
+            ax.set_yticks([])
+        # Don't need to do anything for "ticks" option, just use mpl defaults
 
         figs.append(fig)
 
