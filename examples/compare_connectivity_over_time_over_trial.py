@@ -351,9 +351,15 @@ con_epochs = spectral_connectivity_epochs(
 # epochs and are looking at theta activity. This might make the connectivity
 # measurements more sensitive to noise.
 
-# Plot the global connectivity over time
-global_con_epochs_array = con_epochs.get_data().mean(axis=0, keepdims=True)
+# Average the results over connections to get global connectivity
+n_nodes = epochs.info["nchan"]
+n_connections = (n_channels * n_channels - n_channels) / 2
+global_con_epochs_array = (
+    con_epochs.get_data().sum(axis=0, keepdims=True) / n_connections
+)
 global_con_epochs_array = global_con_epochs_array[0]  # select theta frequency band
+
+# Plot the global connectivity over time
 global_con_epochs = TemporalConnectivity(
     global_con_epochs_array,
     con_epochs.times,
