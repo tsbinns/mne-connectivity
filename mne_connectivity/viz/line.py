@@ -54,7 +54,7 @@ def plot_epoch_connectivity(
 
     _validate_type(con, EpochConnectivity, "con", "EpochConnectivity")
 
-    return _plot_2d_connectivity(
+    return _plot_line_connectivity(
         con=con,
         picks=picks,
         exclude=exclude,
@@ -109,7 +109,7 @@ def plot_spectral_connectivity(
 
     _validate_type(con, SpectralConnectivity, "con", "SpectralConnectivity")
 
-    return _plot_2d_connectivity(
+    return _plot_line_connectivity(
         con=con,
         picks=picks,
         exclude=exclude,
@@ -164,7 +164,7 @@ def plot_temporal_connectivity(
 
     _validate_type(con, TemporalConnectivity, "con", "TemporalConnectivity")
 
-    return _plot_2d_connectivity(
+    return _plot_line_connectivity(
         con=con,
         picks=picks,
         exclude=exclude,
@@ -191,7 +191,7 @@ def plot_temporal_connectivity(
     )
 
 
-def _plot_2d_connectivity(
+def _plot_line_connectivity(
     con,
     picks,
     exclude,
@@ -216,9 +216,9 @@ def _plot_2d_connectivity(
     xvar,
     xlabel,
 ):
-    """Plot 2D connectivity as line plots with circle plot overviews.
+    """Plot connectivity as line plots with circle plot overviews.
 
-    2D connectivity has dims [connections, epochs | frequencies | times].
+    Connectivity has dims [connections, epochs | frequencies | times].
     """
     _check_data_is_real(con.get_data())
 
