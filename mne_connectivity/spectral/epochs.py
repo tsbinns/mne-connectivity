@@ -240,8 +240,8 @@ def _prepare_connectivity(
         if n_f_band == 0:
             raise ValueError(
                 f"There are no frequency points between {fmin[i]:.1f}Hz and "
-                f"{fmax[i]:.1f}Hz. Change the band specification (fmin, fmax) or the "
-                "frequency resolution."
+                f"{fmax[i]:.1f}Hz. Change the band specification (fmin, fmax), the "
+                "frequency resolution, or reduce fdecim."
             )
     if n_bands == 1:
         logger.info(
