@@ -263,22 +263,21 @@ def _prepare_connectivity(
         this_method in _multivariate_methods for this_method in method
     )
 
-    if indices is None:
+    if indices == "all":
         if multivariate_con:
             if any(this_method in _gc_methods for this_method in method):
                 raise ValueError(
                     "indices must be specified when computing Granger causality, as "
                     "all-to-all connectivity is not supported"
                 )
-            logger.info("using all indices for multivariate connectivity")
             # indices expected to be a masked array, even if not ragged
             indices_use = (picks[np.newaxis, :], picks[np.newaxis, :])
             indices_use = np.ma.masked_array(indices_use, mask=False, fill_value=-1)
         else:
-            logger.info("only using indices for lower-triangular matrix")
             # only compute r for lower-triangular region
             indices_use = np.tril_indices(n_good_signals, -1)
             indices_use = tuple(picks[ind] for ind in indices_use)
+        logger.info("using all-to-all connectivity indices")
     else:
         if multivariate_con:
             # pad ragged indices and mask the invalid entries
@@ -1167,6 +1166,9 @@ def spectral_connectivity_epochs(
             _epoch_spectral_connectivity, n_jobs, verbose=verbose
         )
 
+    if indices is None:
+        indices = "all"
+
     # format fmin and fmax and check inputs
     if fmin is None:
         fmin = -np.inf  # set it to -inf, so we can adjust it later
@@ -1218,7 +1220,7 @@ def spectral_connectivity_epochs(
     is_tfr_con = False
     if isinstance(data, BaseEpochs | EpochsSpectrum | EpochsTFR):
         # Find good channels
-        if indices is None:
+        if indices == "all":
             picks = _picks_to_idx(data.info, picks="all", exclude="bads")
 
         names = data.ch_names
@@ -1580,7 +1582,7 @@ def spectral_connectivity_epochs(
         freqs_used = freqs_bands
         freqs_used = [[np.min(band), np.max(band)] for band in freqs_used]
 
-    if indices is None:
+    if indices == "all":
         if not multivariate_con:
             # return all-to-all connectivity matrices raveled into a 1D array
             logger.info("    assembling connectivity matrix")

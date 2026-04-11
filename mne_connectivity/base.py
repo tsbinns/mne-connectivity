@@ -404,9 +404,9 @@ class BaseConnectivity(DynamicMixin, EpochMixin):
         metadata=None,
         **kwargs,
     ):
-        if isinstance(indices, str) and indices not in ["all", "symmetric"]:
+        if not isinstance(indices, tuple) and indices not in ["all", "symmetric"]:
             raise ValueError(
-                'Indices can only be "all", "symmetric", or a list of tuples. '
+                'Indices can only be "all", "symmetric", or a tuple of array-likes. '
                 f"It cannot be {indices}."
             )
 

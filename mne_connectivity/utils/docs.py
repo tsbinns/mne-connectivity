@@ -32,7 +32,7 @@ names : array_like | None
 """
 
 docdict["indices"] = """
-indices : tuple of array_like | ``'all'`` | ``'symmetric'`` | None
+indices : tuple of array_like | ``'all'`` | ``'symmetric'``
     The indices of relevant connectivity data. If ``'all'`` (default), then data is
     connectivity between all nodes. If ``'symmetric'``, then data is symmetric
     connectivity between all nodes. If a tuple, then contains two array-likes where the
