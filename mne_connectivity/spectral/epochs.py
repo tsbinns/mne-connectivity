@@ -259,7 +259,7 @@ def _prepare_connectivity(
         this_method in _multivariate_methods for this_method in method
     )
 
-    if indices is None:
+    if indices is None or isinstance(indices, str):
         if multivariate_con:
             if any(this_method in _gc_methods for this_method in method):
                 raise ValueError(
@@ -271,9 +271,17 @@ def _prepare_connectivity(
             indices_use = (picks[np.newaxis, :], picks[np.newaxis, :])
             indices_use = np.ma.masked_array(indices_use, mask=False, fill_value=-1)
         else:
-            logger.info("only using indices for lower-triangular matrix")
-            # only compute r for lower-triangular region
-            indices_use = np.tril_indices(n_good_signals, -1)
+            if indices is None:
+                logger.info("only using indices for lower-triangular matrix")
+                # only compute r for lower-triangular region
+                indices_use = np.tril_indices(n_good_signals, -1)
+                indices_use = tuple(picks[ind] for ind in indices_use)
+            elif indices == "symmetric":
+                logger.info("Using indices for upper-triangular matrix")
+            else:
+                logger.info("Using indices for all-to-all connectivity")
+            # only compute r for upper-triangular region (all-to-all can be inferred)
+            indices_use = np.triu_indices(n_good_signals, 1)
             indices_use = tuple(picks[ind] for ind in indices_use)
     else:
         if multivariate_con:
@@ -771,7 +779,7 @@ def spectral_connectivity_epochs(
     data,
     names=None,
     method="coh",
-    indices=None,
+    indices="",
     sfreq=None,
     *,
     mode="multitaper",
@@ -853,14 +861,29 @@ def spectral_connectivity_epochs(
 
         Multivariate methods (``['cacoh', 'mic', 'mim', 'gc', 'gc_tr']``) cannot be
         called with the other methods.
-    indices : tuple of array_like | None
-        Two array-likes with indices of connections for which to compute connectivity.
-        If a bivariate method is called, each array for the seeds and targets should
-        contain the channel indices for each bivariate connection. If a multivariate
-        method is called, each array for the seeds and targets should consist of nested
-        arrays containing the channel indices for each multivariate connection. If
-        ``None``, connections between all channels are computed, unless a Granger
-        causality method is called, in which case an error is raised.
+    indices : ``'symmetric'`` | ``'all'`` | tuple of array_like
+        Signals to compute connectivity between. If ``'symmetric'``, only the
+        upper-triangular region of the connectivity matrix is computed. If ``'all'``,
+        all-to-all connectivity is computed, covering the full connectivity matrix. If a
+        tuple, should consist of two array-likes with signal indices. If a bivariate
+        method is called, each array for the seeds and targets should contain the
+        channel indices for each bivariate connection. If a multivariate method is
+        called, each array for the seeds and targets should consist of nested arrays
+        containing the channel indices for each multivariate connection. If a Granger
+        causality method is called, ``indices`` must be specified as a tuple and not
+        contain overlapping signals between the seeds and targets. For other
+        multivariate methods, ``'symmetric'`` and ``'all'`` are equivalent, computing
+        connectivity between all signals.
+
+        .. versionchanged:: 0.9
+            Added ``'symmetric'`` and ``'all'`` as options.
+
+        .. version-deprecated:: 0.9
+            ``None`` as an alias for lower-triangular connectivity is deprecated and
+            will be removed in 0.10. The default value will change to ``'symmetric'`` in
+            0.10. For symmetric connectivity measures, use ``'symmetric'`` to return
+            upper-triangular connectivity. For non-symmetric connectivity measures, use
+            ``'all'`` to retain lower-triangular connectivity.
     sfreq : float | None
         The sampling frequency. Required if ``data`` is an array-like.
     mode : ``'multitaper'`` | ``'fourier'`` | ``'cwt_morlet'``
@@ -958,8 +981,11 @@ def spectral_connectivity_epochs(
         - ``(n_cons, n_freqs, n_times)`` for ``'cwt_morlet'`` mode
         - ``(n_cons, n_comps, n_freqs[, n_times])`` for valid multivariate methods if
           ``n_components > 1``
-        - ``n_cons = n_signals ** 2`` for bivariate methods with ``indices=None``
-        - ``n_cons = 1`` for multivariate methods with ``indices=None``
+        - ``n_cons = (n_signals * (n_signals - 1)) / 2`` for bivariate methods with
+          ``indices='symmetric'``
+        - ``n_cons = n_signals ** 2`` for bivariate methods with ``indices='all'``
+        - ``n_cons = 1`` for multivariate methods with ``indices='all'`` or
+          ``indices='symmetric'``
         - ``n_cons = len(indices[0])`` for bivariate and multivariate methods when
           ``indices`` is supplied
 
@@ -1135,6 +1161,29 @@ def spectral_connectivity_epochs(
     ----------
     .. footbibliography::
     """  # noqa: E501
+    if indices == "":
+        indices = None
+        warn(
+            "`indices=None` as an alias for lower-triangular connectivity is "
+            "deprecated and will be removed in 0.10. For symmetric connectivity "
+            "measures, use `indices='symmetric'` to return upper-triangular "
+            "connectivity. For non-symmetric measure, use `indices='all'` to retain "
+            "lower-triangular connectivity."
+        )
+    if indices is not None:
+        if isinstance(indices, str):
+            _check_option(
+                "indices", indices, ["symmetric", "all"], " when provided as a string"
+            )
+        else:
+            _validate_type(
+                indices,
+                tuple,
+                "indices",
+                "tuple of array-like",
+                extra=" when not 'symmetric' or 'all'",
+            )
+
     if n_jobs != 1:
         parallel, my_epoch_spectral_connectivity, n_jobs = parallel_func(
             _epoch_spectral_connectivity, n_jobs, verbose=verbose
@@ -1323,7 +1372,11 @@ def spectral_connectivity_epochs(
                 gc_n_lags = None
 
             # make sure padded indices are stored in the connectivity object
-            if multivariate_con and indices is not None:
+            if (
+                multivariate_con
+                and indices is not None
+                and not isinstance(indices, str)
+            ):
                 # create a copy so that `indices_use` can be modified
                 indices = (indices_use[0].copy(), indices_use[1].copy())
 
@@ -1582,6 +1635,7 @@ def spectral_connectivity_epochs(
                     this_patterns_full = None
                 patterns_full.append(this_patterns_full)
             patterns = patterns_full
+    # TODO: handle symmetric and all (should handle bad channs)
 
     # number of nodes in the original data
     n_nodes = n_signals
