@@ -15,11 +15,19 @@ from mne.source_estimate import _BaseSourceEstimate
 from mne.utils import _check_option, _ensure_int, _validate_type, logger, verbose, warn
 
 from .base import EpochTemporalConnectivity
+from .utils import check_indices
 
 
 @verbose
 def envelope_correlation(
-    data, names=None, orthogonalize="pairwise", log=False, absolute=True, verbose=None
+    data,
+    names=None,
+    indices="symmetric",
+    *,
+    orthogonalize="pairwise",
+    log=False,
+    absolute=True,
+    verbose=None,
 ):
     """Compute the envelope correlation.
 
@@ -34,6 +42,12 @@ def envelope_correlation(
     names : array_like | None
         A list of names associated with the signals in ``data``. If ``None``, will be a
         list of indices of the number of nodes.
+    indices : ``' symmetric'`` | tuple of array_like
+        The indices of the signals for which to compute correlations. If
+        ``'symmetric'`` (default), the correlation of all unique signal pairs will be
+        computed as the upper-triangular correlation matrix. If a tuple, should contain
+        two array-likes with indices of signals for which to compute correlations
+        between.
     orthogonalize : ``'pairwise'`` | False
         Whether to orthogonalize with the pairwise method or not. Defaults to
         ``'pairwise'``. Note that when ``False``, the correlation matrix will not be
@@ -50,9 +64,11 @@ def envelope_correlation(
     Returns
     -------
     corr : instance of EpochTemporalConnectivity
-        The pairwise orthogonal envelope correlations. This matrix is symmetric. The
-        array will have three dimensions, the first of which is ``n_epochs``. The data
-        shape is ``(n_epochs, (n_nodes + 1) * n_nodes / 2)``.
+        The pairwise envelope correlations. The shape of the connectivity result will
+        be ``(n_epochs, n_cons, n_times)``. If ``indices='symmetric'``, then ``n_cons``
+        is the number of unique signal pairs in the upper-triangular correlation matrix
+        (``(n_signals + 1) * n_signals / 2``). If ``indices`` is a tuple, then
+        ``n_cons = len(indices[0])``.
 
     See Also
     --------
@@ -83,7 +99,8 @@ def envelope_correlation(
     event_id = None
     if isinstance(data, BaseEpochs):
         # Find good channels
-        picks = _picks_to_idx(data.info, picks="all", exclude="bads")
+        if indices == "symmetric":
+            picks = _picks_to_idx(data.info, picks="all", exclude="bads")
 
         names = data.ch_names
         events = data.events
@@ -111,6 +128,20 @@ def envelope_correlation(
     else:
         metadata = None
 
+    # Sort valid channel picks
+    if picks is not None:
+        n_good_signals = len(picks)
+    else:
+        n_good_signals = data[0].shape[0]
+        picks = np.arange(n_good_signals)
+
+    # Get indices of channels to compute correlations between
+    if indices == "symmetric":
+        indices_use = np.triu_indices(n_good_signals, 0)
+        indices_use = tuple(picks[ind] for ind in indices_use)
+    else:
+        indices_use = check_indices(indices)
+
     # Note: This is embarrassingly parallel, but the overhead of sending
     # the data to different workers is roughly the same as the gain of
     # using multiple CPUs. And we require too much GIL for prefer='threading'
@@ -129,8 +160,6 @@ def envelope_correlation(
                 f"{corrs[0].shape[0]}"
             )
         # pick only good channels
-        if picks is None:
-            picks = np.arange(n_nodes)
         epoch_data = epoch_data[picks]
 
         # Get the complex envelope (allowing complex inputs allows people
