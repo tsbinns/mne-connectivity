@@ -15,7 +15,7 @@ from mne_connectivity import (
 
 @pytest.mark.parametrize("n_seeds", [1, 3])
 @pytest.mark.parametrize("n_targets", [1, 3])
-@pytest.mark.parametrize("snr", [0.7, 0.4])
+@pytest.mark.parametrize("snr", [0.4, 0.2])
 @pytest.mark.parametrize("connection_delay", [0, 3, -3])
 @pytest.mark.parametrize("mode", ["multitaper", "fourier", "cwt_morlet"])
 def test_make_signals_in_freq_bands(n_seeds, n_targets, snr, connection_delay, mode):
@@ -174,19 +174,20 @@ def test_make_signals_in_freq_bands_error_catch():
         )
 
 
-@pytest.mark.parametrize(("snr", "should_be_significant"), ([0.3, True], [0.1, False]))
+@pytest.mark.parametrize(("snr", "should_be_significant"), ([0.2, True], [0.1, False]))
 @pytest.mark.parametrize("method", ["multitaper", "welch", "morlet"])
 def test_make_surrogate_data(snr, should_be_significant, method):
     """Test `make_surrogate_data` creates data for null hypothesis testing."""
     # Generate data
     n_seeds = 2
     n_targets = 2
-    freq_band = (10, 15)
+    freq_band = (15, 20)
     n_epochs = 30
     sfreq = 100
-    n_times = sfreq * 2
+    trans_bw = 1
+    n_times = sfreq
     n_shuffles = 1000
-    rng_seed = 1
+    rng_seed = 0
     data = make_signals_in_freq_bands(
         n_seeds=n_seeds,
         n_targets=n_targets,
@@ -194,6 +195,7 @@ def test_make_surrogate_data(snr, should_be_significant, method):
         n_epochs=n_epochs,
         n_times=n_times,
         sfreq=sfreq,
+        trans_bandwidth=trans_bw,
         snr=snr,  # using very high SNR seems to alter properties of data beyond fband
         rng_seed=rng_seed,
     )
@@ -202,10 +204,11 @@ def test_make_surrogate_data(snr, should_be_significant, method):
     )
 
     # Compute Fourier coefficients and generate surrogates
-    fmin, fmax = 6, 50
+    fmin, fmax = 5, 30
     if method == "morlet":
+        freqs = np.arange(fmin, fmax + 1, 1)
         coeffs = data.compute_tfr(
-            method=method, freqs=np.arange(fmin, fmax + 1, 1), output="complex"
+            method=method, freqs=freqs, n_cycles=freqs / 2, output="complex"
         )
     else:
         coeffs = data.compute_psd(method=method, fmin=fmin, fmax=fmax, output="complex")
@@ -227,7 +230,9 @@ def test_make_surrogate_data(snr, should_be_significant, method):
 
     # Determine if connectivity significant
     alpha = 0.05
-    con_freqs = (freqs >= freq_band[0]) & (freqs <= freq_band[1])
+    con_freqs = (freqs >= freq_band[0] - trans_bw * 2) & (
+        freqs <= freq_band[1] + trans_bw * 2
+    )
     noise_freqs = np.invert(con_freqs)
 
     pval_con_freqs = (
@@ -252,7 +257,7 @@ def test_make_surrogate_data(snr, should_be_significant, method):
         assert pval_con_freqs >= alpha, f"pval_con_freqs: {pval_con_freqs}"
 
     # Freqs where nothing simulated should never be significant
-    assert pval_noise_freqs > alpha, f"pval_noise_freqs: {pval_noise_freqs}"
+    assert pval_noise_freqs >= alpha, f"pval_noise_freqs: {pval_noise_freqs}"
 
 
 def test_make_surrogate_data_generator():

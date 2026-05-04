@@ -119,6 +119,7 @@ def make_signals_in_freq_bands(
         h_trans_bandwidth=trans_bandwidth,
         fir_design="firwin2",
     )
+    signal /= np.std(signal)  # re-scale signal to have stdev=1
 
     # simulate noise for each channel
     noise = rng.standard_normal(

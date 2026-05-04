@@ -495,7 +495,7 @@ def test_spectral_connectivity_epochs_spectrum_tfr_input(method, mode, spectra_a
         n_times=n_times,
         sfreq=sfreq,
         trans_bandwidth=trans_bandwidth,
-        snr=0.7,
+        snr=0.4,
         connection_delay=delay,
         rng_seed=44,
     )
@@ -657,7 +657,7 @@ def test_spectral_connectivity_epochs_multivariate(method, n_components):
         n_times=n_times,
         sfreq=sfreq,
         trans_bandwidth=trans_bandwidth,
-        snr=0.7,
+        snr=0.4,
         connection_delay=delay,
         rng_seed=44,
     )
@@ -1422,7 +1422,7 @@ def test_spectral_connectivity_time_phaselocked(method, mode, data_option):
             assert con.shape == (n_epochs, 1, len(con.freqs))
         else:
             assert con.shape == (1, len(con.freqs))
-    else: #  Cohy values are complex, so take abs before validation of properties
+    else:  #  Cohy values are complex, so take abs before validation of properties
         if method == "cohy":
             con_matrix = np.abs(con_matrix).mean(axis=0)
             assert con.shape == (n_epochs, n_channels**2, len(con.freqs))
@@ -1860,7 +1860,7 @@ def test_spectral_connectivity_time_tfr_input(method, mode):
         n_times=200,
         sfreq=100,
         trans_bandwidth=trans_bandwidth,
-        snr=0.7,
+        snr=0.4,
         connection_delay=5,
         rng_seed=44,
     )
