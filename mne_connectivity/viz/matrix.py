@@ -1,3 +1,5 @@
+from weakref import WeakKeyDictionary
+
 import mne
 import numpy as np
 from matplotlib import pyplot as plt
@@ -17,9 +19,63 @@ from .helpers import (
     _handle_picks,
 )
 
+_MATRIX_ANNOTATIONS = WeakKeyDictionary()
+
+
+def _plot_connectivity_matrix_onclick(event, ax, fig, node_names):
+    """Annotate the clicked matrix cell with the corresponding channel names."""
+    if event.inaxes is not ax or event.xdata is None or event.ydata is None:
+        return
+
+    if event.button == 3:  # right-click to remove annotation
+        prev_annot = _MATRIX_ANNOTATIONS.get(ax)
+        if prev_annot is not None:
+            prev_annot[0].remove()
+            prev_annot[1].remove()
+            _MATRIX_ANNOTATIONS[ax] = None
+            fig.canvas.draw_idle()
+        return
+
+    col = int(np.floor(event.xdata + 0.5))
+    row = int(np.floor(event.ydata + 0.5))
+    if row < 0 or row >= len(node_names) or col < 0 or col >= len(node_names):
+        return
+
+    prev_annot = _MATRIX_ANNOTATIONS.get(ax)
+    if prev_annot is not None:
+        prev_annot[0].remove()
+        prev_annot[1].remove()
+        _MATRIX_ANNOTATIONS[ax] = None
+        fig.canvas.draw_idle()
+
+    annotation = ax.text(
+        col + 0.25,
+        row - 0.25,
+        f"{node_names[row]}\n→\n{node_names[col]}",
+        ha="left",
+        va="bottom",
+        color="white",
+        fontsize=8,
+        fontweight="bold",
+        bbox=dict(facecolor="black", alpha=0.6, edgecolor="none", boxstyle="round"),
+    )
+
+    # Highlight the selected cell with a border
+    rect = plt.Rectangle(
+        (col - 0.5, row - 0.5),
+        1,
+        1,
+        linewidth=2,
+        edgecolor="red",
+        facecolor="none",
+    )
+    ax.add_patch(rect)
+
+    _MATRIX_ANNOTATIONS[ax] = (annotation, rect)
+    fig.canvas.draw_idle()
+
 
 # TODO: Add masking support
-# TODO: Could there be interactivity to show con names on click?
 def plot_connectivity(
     con,
     picks=None,
@@ -141,11 +197,16 @@ def plot_connectivity(
         type_node_indices_unique = np.unique(type_node_indices)
         type_node_names = [node_names[idx] for idx in type_node_indices_unique]
         type_n_nodes = type_node_indices_unique.size
+        type_node_pos = {
+            node_idx: pos for pos, node_idx in enumerate(type_node_indices_unique)
+        }
 
         # Make data square for plotting
         square_matrix = np.full((type_n_nodes, type_n_nodes), fill_value=np.nan)
         for idx, (seed_idx, target_idx) in enumerate(zip(*type_node_indices)):
-            square_matrix[seed_idx, target_idx] = data[idx]
+            square_matrix[type_node_pos[seed_idx], type_node_pos[target_idx]] = data[
+                idx
+            ]
         if vmin is None:
             vmin = np.nanmin(square_matrix)
         if vmax is None:
@@ -178,6 +239,11 @@ def plot_connectivity(
             ax.set_yticks([])
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+
+        def callback(event, ax=ax, fig=fig, node_names=type_node_names):
+            _plot_connectivity_matrix_onclick(event, ax, fig, node_names)
+
+        fig.canvas.mpl_connect("button_press_event", callback)
 
         figs.append(fig)
 
