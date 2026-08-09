@@ -2,6 +2,7 @@ import mne
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
+from matplotlib.ticker import MaxNLocator
 from mne._fiff.pick import pick_info
 from mne.utils.check import _check_option, _validate_type
 from mne.utils.misc import _pl
@@ -175,7 +176,8 @@ def plot_connectivity(
         elif node_labels is None:
             ax.set_xticks([])
             ax.set_yticks([])
-        # Don't need to do anything for "ticks" option, just use mpl defaults
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
         figs.append(fig)
 
