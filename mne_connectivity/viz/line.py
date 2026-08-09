@@ -15,7 +15,7 @@ from mne.viz.evoked import (
     _butterfly_onpick,
 )
 
-from .helpers import (
+from mne_connectivity.viz.helpers import (
     _add_comps_as_connections,
     _check_data_is_real,
     _check_info,
