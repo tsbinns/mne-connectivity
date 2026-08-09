@@ -16,14 +16,18 @@ raw_fname = op.join(data_path, "MEG", "sample", "sample_audvis_filt-0-40_raw.fif
 raw = read_raw_fif(raw_fname)
 
 raw.pick("eeg").load_data()
+raw.resample(100)
 
-epochs = make_fixed_length_epochs(raw, duration=2.0)[:10]
+epochs = make_fixed_length_epochs(raw, duration=5.0)[:10]
 epochs.load_data().pick(np.arange(20))
 
-con = spectral_connectivity_epochs(epochs, method="imcoh", fmax=40)
+coeffs = epochs.compute_psd(output="complex", fmin=3)
+
+con = spectral_connectivity_epochs(coeffs, method="imcoh", fmax=40, fskip=1)
 con = SpectralConnectivity(
     np.abs(con.get_data()), con.freqs, con.n_nodes, con.names, con.indices
 )
+
 MULTIVAR = True
 if MULTIVAR:
     con = SpectralConnectivity(
