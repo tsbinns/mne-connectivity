@@ -44,9 +44,10 @@ def spectral_connectivity_time(
     average=False,
     indices=None,
     sfreq=None,
+    *,
     fmin=None,
     fmax=None,
-    fskip=0,
+    fdecim=1,
     faverage=False,
     sm_times=0.0,
     sm_freqs=1,
@@ -93,10 +94,13 @@ def spectral_connectivity_time(
         be specified. If ``data`` is an :class:`mne.time_frequency.EpochsTFR` object,
         ``data.freqs`` is used and this parameter is ignored.
     method : str | list of str
-        Connectivity measure(s) to compute. These can be ``['coh', 'cacoh', 'mic',
-        'mim', 'plv', 'ciplv', 'pli', 'wpli', 'gc', 'gc_tr']``. These are:
+        Connectivity measure(s) to compute. These can be ``['coh', 'cohy', 'imcoh',
+        'cacoh', 'mic', 'mim', 'plv', 'ciplv', 'pli', 'wpli', 'gc', 'gc_tr']``. These
+        are:
 
         * %(coh)s
+        * %(cohy)s
+        * %(imcoh)s
         * %(cacoh)s
         * %(mic)s
         * %(mim)s
@@ -131,11 +135,15 @@ def spectral_connectivity_time(
         The upper frequency of interest. Multiple bands are defined using a tuple, e.g.
         ``(13., 30.)`` for two band with 13 Hz and 30 Hz upper bounds. If ``None``, the
         highest frequency in ``freqs`` is used.
-    fskip : int
-        Omit every ``(fskip + 1)``-th frequency bin to decimate in frequency domain.
+    fdecim : int | None
+        Decimation factor in the frequency domain. Selects every Nth frequency bin from
+        the (time-)frequency decomposition (where N is the value of ``fdecim``). If 1
+        (default), no decimation occurs.
+
+        .. versionadded:: 0.8
     faverage : bool
         Average connectivity scores for each frequency band. If ``True``, the output
-        ``freqs`` will be an array of the median frequencies of each band.
+        ``freqs`` will be an array of the average frequencies of each band.
     sm_times : float
         Amount of time to consider for the temporal smoothing in seconds. If 0, no
         temporal smoothing is applied.
@@ -186,8 +194,9 @@ def spectral_connectivity_time(
 
         .. versionadded:: 0.8
     decim : int
-        To reduce memory usage, decimation factor after time-frequency decomposition.
-        Returns ``tfr[…, ::decim]``.
+        Decimation factor in the time domain. Selects every Nth time bin from the
+        time-frequency decomposition (where N is the value of ``decim``). If 1
+        (default), no decimation occurs.
     n_jobs : int
         Number of connections to compute in parallel. Memory mapping must be activated.
         Please see the Notes section for details.
@@ -284,6 +293,18 @@ def spectral_connectivity_time(
 
                      | E[Sxy] |
             C = ---------------------
+                sqrt(E[Sxx] * E[Syy])
+
+        'cohy' : Coherency given by::
+
+                       E[Sxy]
+            C = ---------------------
+                sqrt(E[Sxx] * E[Syy])
+
+        'imcoh' : Imaginary coherence :footcite:`NolteEtAl2004` given by::
+
+                      Im(E[Sxy])
+            C = ----------------------
                 sqrt(E[Sxx] * E[Syy])
 
         'cacoh' : Canonical Coherency (CaCoh) :footcite:`VidaurreEtAl2019` given by:
@@ -473,6 +494,13 @@ def spectral_connectivity_time(
     # check that method is a list
     if isinstance(method, str):
         method = [method]
+    # validate methods
+    bad_methods = [meth for meth in method if meth not in _CON_METHOD_MAP_TIME]
+    if len(bad_methods) > 0:
+        raise ValueError(
+            f"Connectivity method(s) not recognized: {bad_methods}. Valid methods are "
+            f"{list(_CON_METHOD_MAP_TIME.keys())}"
+        )
 
     # defaults for fmin and fmax
     if fmin is None:
@@ -494,6 +522,10 @@ def spectral_connectivity_time(
             "computing Granger causality on multiple frequency bands is not yet "
             "supported"
         )
+
+    _validate_type(fdecim, int, "fdecim", "int")
+    if fdecim < 1:
+        raise ValueError("`fdecim` must be >= 1")
 
     if any(this_method in _multivariate_methods for this_method in method):
         if not all(this_method in _multivariate_methods for this_method in method):
@@ -601,6 +633,15 @@ def spectral_connectivity_time(
         assert increase, "Frequencies should be in increasing order"
 
     # check that freqs corresponds to at least n_cycles cycles
+    n_cycles = np.array((n_cycles,), dtype=float).ravel()
+    if len(n_cycles) > 1:
+        if len(n_cycles) != len(freqs):
+            raise ValueError(
+                f"n_cycles must be float or an array of length {len(freqs)} "
+                f"frequencies, got {len(n_cycles)} cycles instead."
+            )
+    else:
+        n_cycles = np.repeat(n_cycles, len(freqs))
     dur = float(n_times) / sfreq
     cycle_freq = n_cycles / dur
     if np.any(freqs < cycle_freq):
@@ -616,10 +657,11 @@ def spectral_connectivity_time(
         )
 
     # compute frequency mask based on specified min/max and decimation factor
-    freq_mask = _compute_freq_mask(freqs, fmin, fmax, fskip)
+    freq_mask = _compute_freq_mask(freqs, fmin, fmax, fdecim)
 
     # the frequency points where we compute connectivity
     freqs = freqs[freq_mask]
+    n_cycles = n_cycles[freq_mask]
 
     # compute central frequencies
     _f = xr.DataArray(np.arange(len(freqs)), dims=("freqs",), coords=(freqs,))
@@ -638,8 +680,8 @@ def spectral_connectivity_time(
     conn = dict()
     conn_patterns = dict()
     for m in method:
-        # CaCoh complex-valued, all other methods real-valued
-        if m == "cacoh":
+        # Cohy and CaCoh complex-valued, all other methods real-valued
+        if m in ["cacoh", "cohy"]:
             con_scores_dtype = np.complex128
         else:
             con_scores_dtype = np.float64
@@ -1035,7 +1077,7 @@ def _parallel_con(
         output is a tuple of lists containing arrays for the connectivity scores and
         patterns, respectively.
     """
-    if "coh" in method:
+    if any(m in ["coh", "cohy", "imcoh"] for m in method):
         # psd
         if weights is not None:
             psd = weights * w
@@ -1127,14 +1169,13 @@ def _pairwise_con(w, psd, x, y, method, kernel, foi_idx, faverage, weights):
         s_xy = np.squeeze(s_xy, axis=0)
     s_xy = _smooth_spectra(s_xy, kernel)
     out = []
-    conn_func = {"plv": _plv, "ciplv": _ciplv, "pli": _pli, "wpli": _wpli, "coh": _coh}
     for m in method:
-        if m == "coh":
+        if m in ["coh", "cohy", "imcoh"]:
             s_xx = psd[x]
             s_yy = psd[y]
-            out.append(conn_func[m](s_xx, s_yy, s_xy))
+            out.append(_CON_METHOD_MAP_BIVARIATE_TIME[m](s_xx, s_yy, s_xy))
         else:
-            out.append(conn_func[m](s_xy))
+            out.append(_CON_METHOD_MAP_BIVARIATE_TIME[m](s_xy))
 
     for i, _ in enumerate(out):
         # mean inside frequency sliding window (if needed)
@@ -1370,6 +1411,74 @@ def _coh(s_xx, s_yy, s_xy):
     )
     coh = con_num / con_den
     return coh
+
+
+def _cohy(s_xx, s_yy, s_xy):
+    """Compute coherency given the cross spectral density and PSD.
+
+    Parameters
+    ----------
+    s_xx : array-like, shape (n_freqs, n_times)
+        The PSD of channel 'x'.
+    s_yy : array-like, shape (n_freqs, n_times)
+        The PSD of channel 'y'.
+    s_xy : array-like, shape (n_freqs, n_times)
+        The cross PSD between channel 'x' and channel 'y' across
+        frequency and time points.
+
+    Returns
+    -------
+    cohy : array-like, shape (n_freqs, n_times)
+        The estimated coherency.
+    """
+    con_num = s_xy.mean(axis=-1, keepdims=True)
+    con_den = np.sqrt(
+        s_xx.mean(axis=-1, keepdims=True) * s_yy.mean(axis=-1, keepdims=True)
+    )
+    cohy = con_num / con_den
+    return cohy
+
+
+def _imcoh(s_xx, s_yy, s_xy):
+    """Compute imaginary coherency given the cross spectral density and PSD.
+
+    Parameters
+    ----------
+    s_xx : array-like, shape (n_freqs, n_times)
+        The PSD of channel 'x'.
+    s_yy : array-like, shape (n_freqs, n_times)
+        The PSD of channel 'y'.
+    s_xy : array-like, shape (n_freqs, n_times)
+        The cross PSD between channel 'x' and channel 'y' across
+        frequency and time points.
+
+    Returns
+    -------
+    imcoh : array-like, shape (n_freqs, n_times)
+        The estimated imaginary coherency.
+    """
+    con_num = np.imag(s_xy.mean(axis=-1, keepdims=True))
+    con_den = np.sqrt(
+        s_xx.mean(axis=-1, keepdims=True) * s_yy.mean(axis=-1, keepdims=True)
+    )
+    imcoh = con_num / con_den
+    return imcoh
+
+
+# map names to estimator types
+_CON_METHOD_MAP_BIVARIATE_TIME = {
+    "plv": _plv,
+    "ciplv": _ciplv,
+    "pli": _pli,
+    "wpli": _wpli,
+    "coh": _coh,
+    "cohy": _cohy,
+    "imcoh": _imcoh,
+}
+_CON_METHOD_MAP_TIME = {
+    **_CON_METHOD_MAP_BIVARIATE_TIME,
+    **_CON_METHOD_MAP_MULTIVARIATE,
+}
 
 
 def _compute_csd(x, y, weights):

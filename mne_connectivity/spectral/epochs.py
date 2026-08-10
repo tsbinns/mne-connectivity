@@ -27,7 +27,15 @@ from mne.time_frequency.multitaper import (
     _psd_from_mt_adaptive,
 )
 from mne.time_frequency.tfr import cwt, morlet
-from mne.utils import _arange_div, _check_option, _time_mask, logger, verbose, warn
+from mne.utils import (
+    _arange_div,
+    _check_option,
+    _time_mask,
+    _validate_type,
+    logger,
+    verbose,
+    warn,
+)
 
 from ..base import SpectralConnectivity, SpectroTemporalConnectivity
 from ..utils import _check_multivariate_indices, check_indices, fill_doc
@@ -130,15 +138,18 @@ def _compute_freqs(n_times, sfreq, cwt_freqs, mode):
     return freqs_all
 
 
-def _compute_freq_mask(freqs_all, fmin, fmax, fskip):
+def _compute_freq_mask(freqs_all, fmin, fmax, fdecim):
     # create a frequency mask for all bands
-    freq_mask = np.zeros(len(freqs_all), dtype=bool)
+    freq_mask = np.zeros_like(freqs_all, dtype=bool)
     for f_lower, f_upper in zip(fmin, fmax):
         freq_mask |= (freqs_all >= f_lower) & (freqs_all <= f_upper)
 
-    # possibly skip frequency points
-    for pos in range(fskip):
-        freq_mask[pos + 1 :: fskip + 1] = False
+    # possibly decimate frequency points (start from fmin)
+    if fdecim != 1:
+        first_used_freq = np.where(freq_mask)[0][0]
+        used_freq_mask = freq_mask[first_used_freq:]
+        used_freq_mask[np.arange(used_freq_mask.size) % fdecim != 0] = False
+        freq_mask[first_used_freq:] = used_freq_mask
     return freq_mask
 
 
@@ -155,7 +166,7 @@ def _prepare_connectivity(
     indices,
     method,
     mode,
-    fskip,
+    fdecim,
     n_bands,
     cwt_freqs,
     faverage,
@@ -208,7 +219,7 @@ def _prepare_connectivity(
         freqs = _compute_freqs(n_times, sfreq, cwt_freqs, mode)
 
     # compute the mask based on specified min/max and decimation factor
-    freq_mask = _compute_freq_mask(freqs, fmin, fmax, fskip)
+    freq_mask = _compute_freq_mask(freqs, fmin, fmax, fdecim)
 
     # the frequency points where we compute connectivity
     freqs = freqs[freq_mask]
@@ -335,7 +346,7 @@ def _assemble_spectral_params(
         logger.info("    using CWT with Morlet wavelets to estimate spectra")
 
         # reformat cwt_n_cycles if we have removed some frequencies
-        # using fmin, fmax, fskip
+        # using fmin, fmax, fdecim
         cwt_n_cycles = np.array((cwt_n_cycles,), dtype=float).ravel()
         if len(cwt_n_cycles) > 1:
             if len(cwt_n_cycles) != len(cwt_freqs):
@@ -762,10 +773,11 @@ def spectral_connectivity_epochs(
     method="coh",
     indices=None,
     sfreq=None,
+    *,
     mode="multitaper",
     fmin=None,
     fmax=np.inf,
-    fskip=0,
+    fdecim=1,
     faverage=False,
     tmin=None,
     tmax=None,
@@ -864,8 +876,12 @@ def spectral_connectivity_epochs(
     fmax : float | tuple of float
         The upper frequency of interest. Multiple bands are defined using a tuple, e.g.,
         (13., 30.) for two bands with 13 Hz and 30 Hz upper freq.
-    fskip : int
-        Omit every "(fskip + 1)-th" frequency bin to decimate in frequency domain.
+    fdecim : int | None
+        Decimation factor in the frequency domain. Selects every Nth frequency bin from
+        the (time-)frequency decomposition (where N is the value of ``fdecim``). If 1
+        (default), no decimation occurs.
+
+        .. versionadded:: 0.8
     faverage : bool
         Average connectivity scores for each frequency band. If ``True``, the output
         freqs will be a list with arrays of the frequencies that were averaged.
@@ -1137,6 +1153,10 @@ def spectral_connectivity_epochs(
 
     n_bands = len(fmin)
 
+    _validate_type(fdecim, int, "fdecim", "int")
+    if fdecim < 1:
+        raise ValueError("`fdecim` must be >= 1")
+
     # assign names to connectivity methods
     if not isinstance(method, list | tuple):
         method = [method]  # make it a list so we can iterate over it
@@ -1281,7 +1301,7 @@ def spectral_connectivity_epochs(
                 indices=indices,
                 method=method,
                 mode=mode,
-                fskip=fskip,
+                fdecim=fdecim,
                 n_bands=n_bands,
                 cwt_freqs=cwt_freqs,
                 faverage=faverage,

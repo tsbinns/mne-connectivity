@@ -1,34 +1,68 @@
-# Metadata for citation of this software according to the CFF format (https://citation-file-format.github.io/)
-cff-version: 1.1.0
-message: "If you use this software, please cite it using the metadata below."
+cff-version: 1.2.0
+title: "MNE-Connectivity"
+message: "If you use this software, please cite it using the following information."
+version: 0.8.0
+date-released: "2026-03-23"
+commit: 79bf5a4654daddd8372f45afd4e544a2968bfe93
+doi: 10.5281/zenodo.10278399
+keywords:
+  - MEG
+  - magnetoencephalography
+  - EEG
+  - electroencephalography
+  - fNIRS
+  - "functional near-infrared spectroscopy"
+  - iEEG
+  - "intracranial EEG"
+  - eCoG
+  - electrocorticography
+  - DBS
+  - "deep brain stimulation"
+  - connectivity
+  - "functional connectivity"
+  - "effective connectivity"
+  - coherence
+  - PLV
+  - "phase-locking value"
+  - PLI
+  - "phase lag index"
+  - PSI
+  - "phase slope index"
+  - "Granger causality"
+  - VAR
+  - "vector autoregressive models"
 authors:
-  - given-names: "Adam"
-    family-names: "Li"
-    orcid: https://orcid.org/0000-0001-8421-365X
-  - given-names: "Daniel"
-    family-names: "McCloy"
-    orcid: https://orcid.org/0000-0002-7572-3241
-  - given-names: "Eric"
-    family-names: "Larson"
-    orcid: https://orcid.org/0000-0003-4782-5360
-  - given-names: "Britta"
-    family-names: "Westner"
-    orcid: https://orcid.org/0000-0003-3231-1076
-  - given-names: "Alexander"
-    family-names: "Kroner"
-    orcid: https://orcid.org/0000-0001-8139-0095
-  - given-names: "Alexandre"
-    family-names: "Gramfort"
-    orcid: https://orcid.org/0000-0001-9791-4404
-  - given-names: "Thomas Samuel"
-    family-names: "Binns"
-    orcid: https://orcid.org/0000-0003-0657-0891
-  - given-names: "Mohammad"
-    family-names: "Orabe"
-    orcid: https://orcid.org/0009-0004-7177-799X
-
-
-title: "mne-connectivity"
-version: 0.6.0
-date-released: 2024-12-06
-url: "https://github.com/mne-tools/mne-connectivity"
+  - family-names: Binns
+    given-names: Thomas S
+  - family-names: Li
+    given-names: Adam
+  - family-names: Larson
+    given-names: Eric
+  - family-names: McCloy
+    given-names: Daniel
+  - family-names: Rockhill
+    given-names: Alex
+  - family-names: Li
+    given-names: Qianliang
+  - family-names: Ruuskanen
+    given-names: Santeri
+  - family-names: Kroner
+    given-names: Alexander
+  - family-names: Gramfort
+    given-names: Alexandre
+  - family-names: Marraffini
+    given-names: Giovanni Franco Gabriel
+  - family-names: Shor
+    given-names: Jonathan
+  - family-names: Marshall
+    given-names: Kenji
+  - family-names: Orabe
+    given-names: Mohammad
+  - family-names: Gerster
+    given-names: Moritz
+  - family-names: Köhler
+    given-names: Richard M
+  - family-names: Steingold
+    given-names: Sam
+  - family-names: Mert
+    given-names: Sezan

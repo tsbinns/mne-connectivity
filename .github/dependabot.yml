@@ -4,3 +4,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+      time: "13:00"
+    labels:
+      - no-changelog-entry-needed
+    commit-message:
+      prefix: "[dependabot]"

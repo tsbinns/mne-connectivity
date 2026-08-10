@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 from mne.channels import make_dig_montage, make_standard_montage
+from mne.utils import check_version
 from numpy.testing import assert_allclose, assert_array_equal, assert_array_less
 
 from mne_connectivity import (
@@ -21,6 +22,7 @@ def test_spectral_decomposition(method, mode):
     n_seeds = 3
     n_targets = 3
     n_signals = n_seeds + n_targets
+    duration = 2.0
     n_epochs = 60
     trans_bandwidth = 1
     fstart = 5  # start computing connectivity
@@ -34,10 +36,11 @@ def test_spectral_decomposition(method, mode):
         n_seeds=n_seeds,
         n_targets=n_targets,
         freq_band=(fmin_optimise, fmax_optimise),
+        duration=duration,
         n_epochs=n_epochs,
         trans_bandwidth=trans_bandwidth,
         snr=0.5,
-        connection_delay=10,  # ~90° interaction angle for this freq. band
+        connection_delay=0.1,  # ~90° interaction angle for 11-14 Hz band
         rng_seed=44,
     )
 
@@ -48,10 +51,11 @@ def test_spectral_decomposition(method, mode):
         n_seeds=n_seeds,
         n_targets=n_targets,
         freq_band=(fmin_ignore, fmax_ignore),
+        duration=duration,
         n_epochs=n_epochs,
         trans_bandwidth=trans_bandwidth,
         snr=0.5,
-        connection_delay=6,  # ~90° interaction angle for this freq. band
+        connection_delay=0.06,  # ~90° interaction angle for 21-24 Hz band
         rng_seed=42,
     )
 
@@ -228,16 +232,21 @@ def test_spectral_decomposition(method, mode):
     # TEST PLOTTING
     # Test plot filters/patterns
     # use standard montage to avoid errors around weird fiducial positions
-    standard_1020_pos = make_standard_montage("standard_1020").get_positions()
+    # TODO Version: Remove when MNE 1.13 is minimum required version
+    if check_version("mne", "1.13"):
+        montage_name = "colin27_1020"
+    else:
+        montage_name = "standard_1020"
+    montage_pos = make_standard_montage(montage_name).get_positions()
     epochs.info.set_montage(
         make_dig_montage(
             ch_pos={
                 name: [idx, idx, idx]
                 for idx, name in enumerate(epochs.info["ch_names"])
             },  # avoid overlapping positions for channels (raises error)
-            nasion=standard_1020_pos["nasion"],
-            lpa=standard_1020_pos["lpa"],
-            rpa=standard_1020_pos["rpa"],
+            nasion=montage_pos["nasion"],
+            lpa=montage_pos["lpa"],
+            rpa=montage_pos["rpa"],
         )
     )
     for plot in (decomp_class.plot_filters, decomp_class.plot_patterns):
@@ -254,8 +263,8 @@ def test_spectral_decomposition(method, mode):
         decomp_class.set_params(rank=None)  # reset to default
         decomp_class.fit(X=epochs[: n_epochs // 2].get_data())
         n_comps = n_signals if n_components is None else n_components
-        assert decomp_class.filters_[0].shape == (n_seeds * 2, n_comps)
-        assert decomp_class.filters_[1].shape == (n_targets * 2, n_comps)
+        assert decomp_class.filters_[0].shape == (n_comps, n_seeds * 2)
+        assert decomp_class.filters_[1].shape == (n_comps, n_targets * 2)
         assert decomp_class.patterns_[0].shape == (n_comps, n_seeds * 2)
         assert decomp_class.patterns_[1].shape == (n_comps, n_targets * 2)
 
@@ -265,8 +274,8 @@ def test_spectral_decomposition(method, mode):
         decomp_class.set_params(n_components=None)  # reset to default
         decomp_class.fit(X=epochs[: n_epochs // 2].get_data())
         n_comps = n_signals if rank is None else np.min(rank)
-        assert decomp_class.filters_[0].shape == (n_seeds * 2, n_comps)
-        assert decomp_class.filters_[1].shape == (n_targets * 2, n_comps)
+        assert decomp_class.filters_[0].shape == (n_comps, n_seeds * 2)
+        assert decomp_class.filters_[1].shape == (n_comps, n_targets * 2)
         assert decomp_class.patterns_[0].shape == (n_comps, n_seeds * 2)
         assert decomp_class.patterns_[1].shape == (n_comps, n_targets * 2)
 
@@ -286,8 +295,8 @@ def test_spectral_decomposition(method, mode):
                         n_comps = np.min(rank)
                 else:  # base shape on n_components (checked already that rank != None)
                     n_comps = n_components
-                assert decomp_class.filters_[0].shape == (n_seeds * 2, n_comps)
-                assert decomp_class.filters_[1].shape == (n_targets * 2, n_comps)
+                assert decomp_class.filters_[0].shape == (n_comps, n_seeds * 2)
+                assert decomp_class.filters_[1].shape == (n_comps, n_targets * 2)
                 assert decomp_class.patterns_[0].shape == (n_comps, n_seeds * 2)
                 assert decomp_class.patterns_[1].shape == (n_comps, n_targets * 2)
 
@@ -302,7 +311,7 @@ def test_spectral_decomposition(method, mode):
         # multiple components less stable for Morlet mode, so increase SNR
         snrs = (0.75, 0.65, 0.0)
     dominant_chans = (0, 1, None)  # channels contributing to con. of each component
-    delays = (1, 2, 0)  # connection delays of interactions
+    delays = (0.01, 0.02, 0.0)  # connection delays of interactions
     angles = (40, 135, None)  # interaction angles corresponding to above delays
     seeds = (44, 43, 42)  # RNG seeds for simulations
 
@@ -313,6 +322,7 @@ def test_spectral_decomposition(method, mode):
                 n_seeds=1,
                 n_targets=1,
                 freq_band=fband,
+                duration=duration,
                 n_epochs=n_epochs,
                 trans_bandwidth=trans_bandwidth,
                 snr=snr,
@@ -411,6 +421,9 @@ def test_spectral_decomposition(method, mode):
     assert_array_equal(conn_scores, np.flip(np.sort(conn_scores)))
 
 
+@pytest.mark.filterwarnings(
+    "ignore:The `n_times` parameter as a way to specify epoch length is deprecated"
+)  # TODO: Remove when `n_times` deprecation warning removed
 @pytest.mark.parametrize("method", ["cacoh", "mic"])
 @pytest.mark.parametrize("mode", ["multitaper", "fourier", "cwt_morlet"])
 def test_spectral_decomposition_parallel(method, mode):
@@ -443,6 +456,9 @@ def test_spectral_decomposition_parallel(method, mode):
     decomp_class.fit_transform(X=epochs.get_data())
 
 
+@pytest.mark.filterwarnings(
+    "ignore:The `n_times` parameter as a way to specify epoch length is deprecated"
+)  # TODO: Remove when `n_times` deprecation warning removed
 @pytest.mark.parametrize("method", ["cacoh", "mic"])
 @pytest.mark.parametrize("mode", ["multitaper", "fourier", "cwt_morlet"])
 def test_spectral_decomposition_error_catch(method, mode):

@@ -23,9 +23,14 @@ from .base import (
     SpectroTemporalConnectivity,
     TemporalConnectivity,
 )
-from .datasets import make_signals_in_freq_bands, make_surrogate_data
+from .datasets import (
+    make_signals_in_freq_bands,
+    make_surrogate_data,
+    make_surrogate_evoked_data,
+    make_surrogate_resting_data,
+)
 from .decoding import CoherencyDecomposition
-from .effective import phase_slope_index
+from .effective import phase_slope_index, phase_slope_index_time
 from .envelope import envelope_correlation, symmetric_orth
 from .io import read_connectivity
 from .spectral import spectral_connectivity_epochs, spectral_connectivity_time
@@ -36,3 +41,4 @@ from .utils import (
     seed_target_multivariate_indices,
 )
 from .vector_ar import select_order, vector_auto_regression
+from .wsmi import wsmi
