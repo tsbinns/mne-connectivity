@@ -171,7 +171,9 @@ for con in con_epochs:
     con_method = Connectivity(
         con_array, con.n_nodes, con.names, con.indices, con.method
     )
-    plot_connectivity(con_method, info=data_epoch.info, vmin=0.0, vmax=1.0)
+    plot_connectivity(
+        con_method, info=data_epoch.info, node_labels="names", vmin=0.0, vmax=1.0
+    )
 
 ###############################################################################
 # We see that when using repeated trials without any noise, the phase coupling
@@ -202,7 +204,9 @@ for con in con_time:
     con_method = Connectivity(
         con_array, con.n_nodes, con.names, con.indices, con.method
     )
-    plot_connectivity(con_method, info=data_epoch.info, vmin=0.0, vmax=1.0)
+    plot_connectivity(
+        con_method, info=data_epoch.info, node_labels="names", vmin=0.0, vmax=1.0
+    )
 
 ###############################################################################
 # We see that the connectivity over time are not 1, since the signals were
@@ -256,7 +260,9 @@ for con in con_epochs:
     con_method = Connectivity(
         con_array, con.n_nodes, con.names, con.indices, con.method
     )
-    plot_connectivity(con_method, info=data_epoch.info, vmin=0.0, vmax=1.0)
+    plot_connectivity(
+        con_method, info=data_epoch.info, node_labels="names", vmin=0.0, vmax=1.0
+    )
 
 ###############################################################################
 # We see that connectivity over trials are not 1, since the phase differences
@@ -280,7 +286,9 @@ for con in con_time:
     con_method = Connectivity(
         con_array, con.n_nodes, con.names, con.indices, con.method
     )
-    plot_connectivity(con_method, info=data_epoch.info, vmin=0.0, vmax=1.0)
+    plot_connectivity(
+        con_method, info=data_epoch.info, node_labels="names", vmin=0.0, vmax=1.0
+    )
 
 ###############################################################################
 # We see that for case 2, the connectivity over time is approximately 1,
@@ -389,7 +397,7 @@ max_con = Connectivity(
     con_epochs.indices,
     con_epochs.method,
 )
-plot_connectivity(max_con, info=epochs.info)
+plot_connectivity(max_con, info=epochs.info, node_labels="names")
 
 # Visualize top 20 connections in 3D
 plot_sensors_connectivity(epochs.info, max_con, n_con=20)

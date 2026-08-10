@@ -234,11 +234,12 @@ def plot_connectivity(
             ax.set_yticks(np.arange(type_n_nodes))
             ax.set_xticklabels(type_node_names, rotation=90)
             ax.set_yticklabels(type_node_names)
-        elif node_labels is None:
+        if node_labels is None:
             ax.set_xticks([])
             ax.set_yticks([])
-        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+        else:
+            ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+            ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
         def callback(event, ax=ax, fig=fig, node_names=type_node_names):
             _plot_connectivity_matrix_onclick(event, ax, fig, node_names)
