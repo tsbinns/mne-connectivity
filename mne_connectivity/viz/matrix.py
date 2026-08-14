@@ -7,7 +7,6 @@ from matplotlib.colors import Normalize
 from matplotlib.ticker import MaxNLocator
 from mne._fiff.pick import pick_info
 from mne.utils.check import _check_option, _validate_type
-from mne.utils.misc import _pl
 
 from .helpers import (
     _add_comps_as_connections,
@@ -193,7 +192,6 @@ def plot_connectivity(
         # Prepare connectivity info for plotting
         type_mask = con_types == con_type
         type_node_indices = tuple(idcs[type_mask] for idcs in node_indices)
-        type_n_cons = len(type_node_indices[0])
         type_node_indices_unique = np.unique(type_node_indices)
         type_node_names = [node_names[idx] for idx in type_node_indices_unique]
         type_n_nodes = type_node_indices_unique.size
@@ -223,10 +221,7 @@ def plot_connectivity(
         if colorbar:
             fig.colorbar(ax.images[0], ax=ax, shrink=0.6, label="Connectivity (A.U.)")
 
-        ax.set_title(
-            f"{con_type} {con_method} ({type_n_cons} connection{_pl(type_n_cons)} from "
-            f"{type_n_nodes} node{_pl(type_n_nodes)})"
-        )
+        ax.set_title(f"{con_type} {con_method}")
         ax.set_xlabel("Targets")
         ax.set_ylabel("Seeds")
         if node_labels == "names":
