@@ -10,6 +10,31 @@ A brief background on the difference between the two conditions is provided,
 followed by examples on simulated data and real EEG data.
 
 """
+
+# Author: Qianliang Li <glia@dtu.dk>
+#
+# License: BSD (3-clause)
+#
+# sphinx_gallery_thumbnail_number = 12
+
+import mne
+import numpy as np
+from mne.datasets import sample
+
+from mne_connectivity import (
+    Connectivity,
+    TemporalConnectivity,
+    spectral_connectivity_epochs,
+    spectral_connectivity_time,
+)
+from mne_connectivity.viz import (
+    plot_connectivity,
+    plot_sensors_connectivity,
+    plot_temporal_connectivity,
+)
+
+rng = np.random.default_rng(1234)  # set seed for reproducibility
+
 ###############################################################################
 # Background
 # ----------
@@ -70,30 +95,6 @@ followed by examples on simulated data and real EEG data.
 # we will employ them on two simulated cases and also analyze a real
 # visual task dataset.
 
-# Author: Qianliang Li <glia@dtu.dk>
-#
-# License: BSD (3-clause)
-
-import mne
-import numpy as np
-from mne.datasets import sample
-
-from mne_connectivity import (
-    Connectivity,
-    TemporalConnectivity,
-    spectral_connectivity_epochs,
-    spectral_connectivity_time,
-)
-from mne_connectivity.viz import (
-    plot_connectivity,
-    plot_sensors_connectivity,
-    plot_temporal_connectivity,
-)
-
-rng = np.random.default_rng(1234)  # set seed for reproducibility
-
-print(__doc__)
-
 ###############################################################################
 # Simulated examples
 # ------------------
@@ -107,8 +108,8 @@ print(__doc__)
 
 n_epochs = 5  # number of simulated epochs
 n_channels = 3  # number of channels
-n_times = 2000  # number of sample points
-sfreq = 250  # Set sampling freq
+n_times = 300  # number of sample points
+sfreq = 100  # Set sampling freq
 data = rng.random((n_epochs, n_channels, n_times))  # generate random data
 
 # In case 1, we overwrite all epochs with the data from the first epoch
@@ -119,7 +120,7 @@ ch_names = ["C3", "Cz", "C4"]  # three random channel names
 info = mne.create_info(ch_names, sfreq, ch_types="eeg")  # create info object
 data_epoch = mne.EpochsArray(data, info)  # create EpochsArray
 
-data_epoch.plot(scalings=0.75)  # Visualize the data
+data_epoch.plot(n_epochs=2, scalings=0.6)  # Visualize the data
 
 ###############################################################################
 # First we compute connectivity over trials.
