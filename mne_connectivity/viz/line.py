@@ -4,16 +4,9 @@ import mne
 import numpy as np
 from matplotlib import pyplot as plt
 from mne._fiff.pick import pick_info
-from mne.utils.check import (
-    _check_option,
-    _validate_type,
-)
-from mne.utils.misc import _pl
+from mne.utils.check import _check_option, _validate_type
 from mne.viz.circle import _plot_connectivity_circle
-from mne.viz.evoked import (
-    _butterfly_on_button_press,
-    _butterfly_onpick,
-)
+from mne.viz.evoked import _butterfly_on_button_press, _butterfly_onpick
 
 from mne_connectivity.viz.helpers import (
     _add_comps_as_connections,
@@ -364,7 +357,6 @@ def _plot_line_connectivity(
             data=type_data,
             con_colors=con_colors,
             con_names=type_con_names,
-            n_nodes=len(type_con_names),
             duplicate_cons=duplicate_cons,
             fig=fig,
             ax=line_ax,
@@ -575,7 +567,6 @@ def _plot_connectivity_lines(
     data,
     con_colors,
     con_names,
-    n_nodes,
     duplicate_cons,
     fig,
     ax,
@@ -669,9 +660,7 @@ def _plot_connectivity_lines(
         ax.set_xlim(xlim)
     if ylim is not None:
         ax.set_ylim(ylim)
-    ax.set_title(
-        f"{title} ({n_cons} connection{_pl(n_cons)} from {n_nodes} node{_pl(n_nodes)})"
-    )
+    ax.set_title(title)
 
     # Plot highlights
     if highlight is not None:
