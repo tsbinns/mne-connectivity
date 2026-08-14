@@ -227,7 +227,7 @@ def plot_connectivity(
         if node_labels == "names":
             ax.set_xticks(np.arange(type_n_nodes))
             ax.set_yticks(np.arange(type_n_nodes))
-            ax.set_xticklabels(type_node_names, rotation=90)
+            ax.set_xticklabels(type_node_names, rotation=45)
             ax.set_yticklabels(type_node_names)
         if node_labels is None:
             ax.set_xticks([])
