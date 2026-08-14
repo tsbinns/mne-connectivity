@@ -101,7 +101,12 @@ def _get_node_names_and_indices(ch_names, node_aliases, indices, is_multivar):
             if node_ind in node_aliases.keys():
                 node_names[node_ind] = node_aliases[node_ind]
     else:
-        unique_nodes = list(set([tuple(ind) for ind in (*indices[0], *indices[1])]))
+        unique_nodes = set()
+        for node_ind in (*indices[0], *indices[1]):
+            if isinstance(node_ind, np.ma.MaskedArray):
+                node_ind = node_ind.compressed()
+            unique_nodes.add(tuple(node_ind))
+        unique_nodes = list(unique_nodes)
         node_names = [f"node {node_idx}" for node_idx in range(len(unique_nodes))]
         for node_idx, node_ind in enumerate(unique_nodes):
             if node_ind in node_aliases.keys():
@@ -113,8 +118,18 @@ def _get_node_names_and_indices(ch_names, node_aliases, indices, is_multivar):
     else:  # get indices in terms of unique nodes
         node_indices = ([], [])
         for seed, target in zip(*indices):
-            node_indices[0].append(np.where((unique_nodes == seed).all(axis=1))[0][0])
-            node_indices[1].append(np.where((unique_nodes == target).all(axis=1))[0][0])
+            if isinstance(seed, np.ma.MaskedArray):
+                seed = seed.compressed()
+            if isinstance(target, np.ma.MaskedArray):
+                target = target.compressed()
+            for node_idx, node in enumerate(unique_nodes):
+                if np.array_equal(node, seed):
+                    node_indices[0].append(node_idx)
+                    break
+            for node_idx, node in enumerate(unique_nodes):
+                if np.array_equal(node, target):
+                    node_indices[1].append(node_idx)
+                    break
         node_indices = (np.array(node_indices[0]), np.array(node_indices[1]))
 
     return node_names, node_indices
@@ -134,6 +149,10 @@ def _get_con_info(ch_info, node_names, indices, node_indices, is_multivar):
             target_type = DEFAULTS["titles"][ch_types[target]]
             con_types.append(f"{seed_type} → {target_type}")
         else:
+            if isinstance(seed, np.ma.MaskedArray):
+                seed = seed.compressed()
+            if isinstance(target, np.ma.MaskedArray):
+                target = target.compressed()
             seed_types = np.unique(
                 [DEFAULTS["titles"][ch_types[ch_idx]] for ch_idx in seed]
             )
