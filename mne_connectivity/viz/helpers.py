@@ -2,7 +2,7 @@ import mne
 import numpy as np
 from mne._fiff.pick import _picks_to_idx
 from mne.defaults import DEFAULTS
-from mne.stats.permutations import _ci
+from mne.stats.permutations import bootstrap_confidence_interval
 from mne.utils.check import _check_if_nan
 
 
@@ -199,9 +199,7 @@ def _add_comps_as_connections(data, con_info, node_indices, comps_axis):
 
     new_con_names = []
     for con_name in con_info["ch_names"]:
-        new_con_names.extend(
-            [f"{con_name} (component {comp})" for comp in range(n_comps)]
-        )
+        new_con_names.extend([f"{con_name} ({comp})" for comp in range(n_comps)])
     new_con_types = np.repeat(con_info["temp"]["con_types"], n_comps)
 
     with con_info._unlock():
@@ -213,10 +211,11 @@ def _add_comps_as_connections(data, con_info, node_indices, comps_axis):
 
 def _combine_connections(data, combine, ci, n_comps=1):
     """Combine data over connections."""
-    assert data.shape[0] / n_comps % 2 == 0, (
+    assert data.shape[0] % n_comps == 0, (
         "Data to combine does not have a matching number of connections for each "
         "component. Please contact the MNE-Connectivity developers."
     )
+    n_cons = data.shape[0] // n_comps
 
     if combine == "mean":
         combine_func = lambda x: np.mean(x, axis=0)  # noqa: E731
@@ -236,13 +235,17 @@ def _combine_connections(data, combine, ci, n_comps=1):
             "The `ci` parameter is not a float as expected. "
             "Please contact the MNE-Connectivity developers."
         )
-        ci_func = lambda x: tuple(_ci(x, ci=ci / 100))  # noqa: E731
+        ci_func = lambda x: tuple(  # noqa: E731
+            bootstrap_confidence_interval(arr=x, ci=ci / 100, stat_fun=combine_func)
+        )
 
-    data_combined = np.empty((n_comps, data.shape[1:]), dtype=data.dtype)
+    data_combined = np.empty((n_comps, *data.shape[1:]), dtype=data.dtype)
     data_ci = np.empty(data_combined.shape + (2,), dtype=data.dtype)
     for comp_idx in range(n_comps):
-        data_combined[comp_idx] = combine_func(data[::n_comps])
-        ci_out = ci_func(data[::n_comps])
+        data_combined[comp_idx] = combine_func(
+            data[n_cons * comp_idx : n_cons * (comp_idx + 1)]
+        )
+        ci_out = ci_func(data[n_cons * comp_idx : n_cons * (comp_idx + 1)])
         if isinstance(ci_out, tuple):
             assert len(ci_out) == 2, (
                 f"Expected `len(ci_out)` of 2, got {len(ci_out)}. "
@@ -260,7 +263,7 @@ def _combine_connections(data, combine, ci, n_comps=1):
         node_indices = (np.array([0]), np.array([0]))
     else:
         con_names = np.array(
-            [f"combined nodes (component {comp_idx})" for comp_idx in range(n_comps)]
+            [f"combined nodes ({comp_idx})" for comp_idx in range(n_comps)]
         )
         node_names = con_names.copy()
         node_indices = (np.arange(n_comps), np.arange(n_comps))

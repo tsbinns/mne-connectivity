@@ -26,7 +26,7 @@ def plot_spectral_connectivity(
     picks=None,
     exclude="bads",
     info=None,
-    combine=False,
+    combine=None,
     ci="sd",
     node_aliases=None,
     node_selection="seeds_and_targets",
@@ -85,7 +85,7 @@ def plot_temporal_connectivity(
     picks=None,
     exclude="bads",
     info=None,
-    combine=False,
+    combine=None,
     ci="sd",
     node_aliases=None,
     node_selection="seeds_and_targets",
@@ -180,7 +180,7 @@ def _plot_line_connectivity(
     if isinstance(combine, str):
         _check_option("combine", combine, ["mean"], " as a string")
 
-    _validate_type(ci, (str, float, None), "`ci`")
+    _validate_type(ci, (str, int, float, None), "`ci`")
     if isinstance(ci, str):
         _check_option("ci", ci, ["sd", "range"], " as a string")
     elif isinstance(ci, int | float):
@@ -500,7 +500,7 @@ def _plot_connectivity_circle_onpick(
 
     patches = circle_ax.patches
     lines = line_ax.lines
-    line_patches = line_ax.patches
+    collections = line_ax.collections
     if event.button == 1:  # left click
         if not ylim[0] <= event.ydata <= ylim[1]:
             return  # ignore click if not near nodes
@@ -526,20 +526,18 @@ def _plot_connectivity_circle_onpick(
             patches[circle_idx].set_visible(visible)
             lines[line_idx].set_visible(visible)
             lines[line_idx].set_picker(0 if not visible else True)
-            line_patches[line_idx].set_visible(visible)
+            collections[line_idx].set_visible(visible)
         fig.canvas.draw()
 
     elif event.button == 3:  # right click
         n_cons = len(indices[0]) if not duplicate_cons else len(indices[0]) // 2
         for circle_idx, line_idx in enumerate(circle_con_order):
-            if line_idx < n_cons:  # make original connections visible
-                visible = True
-            else:  # hide duplicated connections
-                visible = False
+            # Make original connections visible and hide duplicated connections
+            visible = line_idx < n_cons
             patches[circle_idx].set_visible(visible)
             lines[line_idx].set_visible(visible)
-            lines[line_idx].set_picker(visible)
-            line_patches[line_idx].set_picker(visible)
+            lines[line_idx].set_picker(0 if not visible else True)
+            collections[line_idx].set_visible(visible)
         for text in line_ax.texts:
             text.set_alpha(0)  # hide any connection labels
         fig.canvas.draw()
@@ -552,7 +550,7 @@ def _hide_duplicate_cons(fig, circle_ax, line_ax, n_cons, circle_con_order):
             circle_ax.patches[circle_idx].set_visible(False)
             line_ax.lines[line_idx].set_visible(False)
             line_ax.lines[line_idx].set_picker(False)
-            line_ax.patches[line_idx].set_visible(False)
+            line_ax.collections[line_idx].set_visible(False)
     fig.canvas.draw()
 
 
@@ -609,9 +607,11 @@ def _plot_connectivity_lines(
         if ci is not None:
             ax.fill_between(
                 xvar,
-                ci[con_idx],
+                ci[con_idx, :, 0],
+                ci[con_idx, :, 1],
                 zorder=z + 1,
                 color=con_colors[con_idx],
+                edgecolor=None,
                 alpha=ci_alpha,
             )
         lines.append(
