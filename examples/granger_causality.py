@@ -363,7 +363,7 @@ gc_ab_60 = spectral_connectivity_epochs(
     fmax=30,
     rank=(np.array([5]), np.array([5])),
     gc_n_lags=60,
-)  # A => B
+)  # A → B
 
 fig, axis = plt.subplots(1, 1)
 axis.plot(freqs, gc_ab.get_data()[0], linewidth=2, label="20 lags")
@@ -426,7 +426,7 @@ spectral_connectivity_epochs(
     rank=None,
     gc_n_lags=20,
     verbose=False,
-)  # A => B
+)  # A → B
 
 ###############################################################################
 # Rigorous checks are implemented to identify any such instances which would
