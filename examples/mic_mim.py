@@ -297,7 +297,7 @@ plt.show()
 
 # %%
 
-plot_spectral_connectivity(mim)
+plot_spectral_connectivity(mim, info=epochs.info)
 
 n_channels = len(seeds) + len(targets)
 normalised_mim = mim.get_data()[0] / n_channels
@@ -332,7 +332,7 @@ gim = spectral_connectivity_epochs(
     epochs, method="mim", indices=indices, fmin=5, fmax=30, rank=None, verbose=False
 )
 
-plot_spectral_connectivity(gim)
+plot_spectral_connectivity(gim, info=epochs.info)
 
 n_channels = len(seeds) + len(targets)
 normalised_gim = gim.get_data()[0] / n_channels
