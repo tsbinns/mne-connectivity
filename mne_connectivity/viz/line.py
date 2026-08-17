@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from functools import partial
 
 import mne
@@ -12,6 +13,7 @@ from mne_connectivity.viz.helpers import (
     _add_comps_as_connections,
     _check_data_is_real,
     _check_info,
+    _combine_connections,
     _get_con_info,
     _get_node_names_and_indices,
     _handle_data_and_indices,
@@ -19,66 +21,13 @@ from mne_connectivity.viz.helpers import (
 )
 
 
-def plot_epoch_connectivity(
-    con,
-    picks=None,
-    exclude="bads",
-    info=None,
-    node_aliases=None,
-    node_selection="seeds_and_targets",
-    node_width=None,
-    node_height=1.0,
-    node_linewidth=2.0,
-    node_colors="black",
-    node_edgecolor="white",
-    connection_colors="auto",
-    connection_colormap="turbo",
-    linewidth_lineplot=0.5,
-    linewidth_circleplot=1.5,
-    fontsize_names=8,
-    circleplot_padding=6.0,
-    xlim="tight",
-    highlight=None,
-    interactive=True,
-    show=True,
-):
-    """Plot epochs connectivity as line plots with circle plot overviews."""
-    from mne_connectivity import EpochConnectivity
-
-    _validate_type(con, EpochConnectivity, "con", "EpochConnectivity")
-
-    return _plot_line_connectivity(
-        con=con,
-        picks=picks,
-        exclude=exclude,
-        info=info,
-        node_aliases=node_aliases,
-        node_selection=node_selection,
-        node_width=node_width,
-        node_height=node_height,
-        node_linewidth=node_linewidth,
-        node_colors=node_colors,
-        node_edgecolor=node_edgecolor,
-        connection_colors=connection_colors,
-        connection_colormap=connection_colormap,
-        linewidth_lineplot=linewidth_lineplot,
-        linewidth_circleplot=linewidth_circleplot,
-        fontsize_names=fontsize_names,
-        circleplot_padding=circleplot_padding,
-        xlim=xlim,
-        highlight=highlight,
-        interactive=interactive,
-        show=show,
-        xvar=np.arange(con.n_epochs),
-        xlabel="Epoch",
-    )
-
-
 def plot_spectral_connectivity(
     con,
     picks=None,
     exclude="bads",
     info=None,
+    combine=False,
+    ci="sd",
     node_aliases=None,
     node_selection="seeds_and_targets",
     node_width=None,
@@ -107,6 +56,8 @@ def plot_spectral_connectivity(
         picks=picks,
         exclude=exclude,
         info=info,
+        combine=combine,
+        ci=ci,
         node_aliases=node_aliases,
         node_selection=node_selection,
         node_width=node_width,
@@ -134,6 +85,8 @@ def plot_temporal_connectivity(
     picks=None,
     exclude="bads",
     info=None,
+    combine=False,
+    ci="sd",
     node_aliases=None,
     node_selection="seeds_and_targets",
     node_width=None,
@@ -162,6 +115,8 @@ def plot_temporal_connectivity(
         picks=picks,
         exclude=exclude,
         info=info,
+        combine=combine,
+        ci=ci,
         node_aliases=node_aliases,
         node_selection=node_selection,
         node_width=node_width,
@@ -180,7 +135,7 @@ def plot_temporal_connectivity(
         interactive=interactive,
         show=show,
         xvar=con.times,
-        xlabel="Times (s)",
+        xlabel="Time (s)",
     )
 
 
@@ -189,6 +144,8 @@ def _plot_line_connectivity(
     picks,
     exclude,
     info,
+    combine,
+    ci,
     node_aliases,
     node_selection,
     node_width,
@@ -211,13 +168,24 @@ def _plot_line_connectivity(
 ):
     """Plot connectivity as line plots with circle plot overviews.
 
-    Connectivity has dims [connections, epochs | frequencies | times].
+    Connectivity has dims [connections, frequencies | times].
     """
     _check_data_is_real(con.get_data())
 
     _check_option("con.shape", len(con.shape), [2, 3], " length")
 
     _validate_type(info, (mne.Info, None), "`info`", "mne.Info or None")
+
+    _validate_type(combine, (str, Callable, None), "`combine`")
+    if isinstance(combine, str):
+        _check_option("combine", combine, ["mean"], " as a string")
+
+    _validate_type(ci, (str, float, None), "`ci`")
+    if isinstance(ci, str):
+        _check_option("ci", ci, ["sd", "range"], " as a string")
+    elif isinstance(ci, int | float):
+        if not 0 < ci <= 100:
+            raise ValueError("If `ci` is a float, it must be > 0 and <= 100.")
 
     _validate_type(node_aliases, (dict, None), "`node_aliases`", "dict or None")
     _check_option(
@@ -233,7 +201,7 @@ def _plot_line_connectivity(
     if not isinstance(xlim, str):
         _check_option("xlim", len(xlim), [2], " length")
     else:
-        _check_option("xlim", xlim, ["tight"], " as a str")
+        _check_option("xlim", xlim, ["tight"], " as a string")
 
     _validate_type(highlight, ("array-like", None), "`highlight`", "array-like or None")
     if highlight is not None:
@@ -264,8 +232,9 @@ def _plot_line_connectivity(
     con_info["temp"]["con_types"] = con_info["temp"]["con_types"][picks]
 
     # Add multivariate components as additional connections
+    n_comps = 1
     if data.ndim == 3:
-        data, con_info, node_indices = _add_comps_as_connections(
+        data, con_info, node_indices, n_comps = _add_comps_as_connections(
             data, con_info, node_indices, comps_axis=1
         )
 
@@ -277,7 +246,19 @@ def _plot_line_connectivity(
         type_mask = con_types == con_type
         type_data = data[type_mask]
         type_con_names = np.array(con_info["ch_names"])[type_mask]
+        type_node_names = node_names.copy()
         type_node_indices = tuple(idcs[type_mask] for idcs in node_indices)
+
+        # Combine connectivity across connections
+        type_ci = None
+        if combine is not None:
+            (
+                type_data,
+                type_ci,
+                type_con_names,
+                type_node_names,
+                type_node_indices,
+            ) = _combine_connections(type_data, combine, ci, n_comps)
 
         # Create figure and axes
         fig = plt.figure(figsize=(15, 5), facecolor="w", layout="constrained")
@@ -291,7 +272,7 @@ def _plot_line_connectivity(
         if plot_circle:
             # Prepare circle plot values
             circle_names, circle_indices, is_all_to_all = _get_circle_names_and_indices(
-                node_names, type_node_indices
+                type_node_names, type_node_indices
             )
             n_circle_nodes = len(circle_names)
             node_is_selectable = _get_node_selectability(circle_indices, node_selection)
@@ -356,6 +337,7 @@ def _plot_line_connectivity(
         # Plot connectivity as lines
         fig, line_ax = _plot_connectivity_lines(
             data=type_data,
+            ci=type_ci,
             con_colors=con_colors,
             con_names=type_con_names,
             duplicate_cons=duplicate_cons,
@@ -368,6 +350,7 @@ def _plot_line_connectivity(
             title=f"{con_type} {con_method}",
             interactive=interactive,
             line_alpha=0.75,
+            ci_alpha=0.3,
             linewidth=linewidth_lineplot,
             highlight=highlight,
         )
@@ -517,6 +500,7 @@ def _plot_connectivity_circle_onpick(
 
     patches = circle_ax.patches
     lines = line_ax.lines
+    line_patches = line_ax.patches
     if event.button == 1:  # left click
         if not ylim[0] <= event.ydata <= ylim[1]:
             return  # ignore click if not near nodes
@@ -542,19 +526,20 @@ def _plot_connectivity_circle_onpick(
             patches[circle_idx].set_visible(visible)
             lines[line_idx].set_visible(visible)
             lines[line_idx].set_picker(0 if not visible else True)
+            line_patches[line_idx].set_visible(visible)
         fig.canvas.draw()
 
     elif event.button == 3:  # right click
         n_cons = len(indices[0]) if not duplicate_cons else len(indices[0]) // 2
         for circle_idx, line_idx in enumerate(circle_con_order):
             if line_idx < n_cons:  # make original connections visible
-                patches[circle_idx].set_visible(True)
-                lines[line_idx].set_visible(True)
-                lines[line_idx].set_picker(True)
+                visible = True
             else:  # hide duplicated connections
-                patches[circle_idx].set_visible(False)
-                lines[line_idx].set_visible(False)
-                lines[line_idx].set_picker(False)
+                visible = False
+            patches[circle_idx].set_visible(visible)
+            lines[line_idx].set_visible(visible)
+            lines[line_idx].set_picker(visible)
+            line_patches[line_idx].set_picker(visible)
         for text in line_ax.texts:
             text.set_alpha(0)  # hide any connection labels
         fig.canvas.draw()
@@ -567,11 +552,13 @@ def _hide_duplicate_cons(fig, circle_ax, line_ax, n_cons, circle_con_order):
             circle_ax.patches[circle_idx].set_visible(False)
             line_ax.lines[line_idx].set_visible(False)
             line_ax.lines[line_idx].set_picker(False)
+            line_ax.patches[line_idx].set_visible(False)
     fig.canvas.draw()
 
 
 def _plot_connectivity_lines(
     data,
+    ci,
     con_colors,
     con_names,
     duplicate_cons,
@@ -584,6 +571,7 @@ def _plot_connectivity_lines(
     title,
     interactive,
     line_alpha,
+    ci_alpha,
     linewidth,
     highlight,
 ):
@@ -618,6 +606,14 @@ def _plot_connectivity_lines(
 
     # plot connections
     for con_idx, z in enumerate(z_ord):
+        if ci is not None:
+            ax.fill_between(
+                xvar,
+                ci[con_idx],
+                zorder=z + 1,
+                color=con_colors[con_idx],
+                alpha=ci_alpha,
+            )
         lines.append(
             ax.plot(
                 xvar,
@@ -632,6 +628,14 @@ def _plot_connectivity_lines(
         lines[-1].set_pickradius(3.0)
     if duplicate_cons:
         for con_idx, z in enumerate(z_ord):
+            if ci is not None:
+                ax.fill_between(
+                    xvar,
+                    ci[con_idx],
+                    zorder=z + 1,
+                    color=con_colors[con_idx],
+                    alpha=ci_alpha,
+                )
             lines.append(
                 ax.plot(
                     xvar,

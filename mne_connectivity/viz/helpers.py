@@ -2,6 +2,7 @@ import mne
 import numpy as np
 from mne._fiff.pick import _picks_to_idx
 from mne.defaults import DEFAULTS
+from mne.stats.permutations import _ci
 from mne.utils.check import _check_if_nan
 
 
@@ -207,4 +208,61 @@ def _add_comps_as_connections(data, con_info, node_indices, comps_axis):
         con_info["ch_names"] = new_con_names
     con_info["temp"]["con_types"] = new_con_types
 
-    return data, con_info, node_indices
+    return data, con_info, node_indices, n_comps
+
+
+def _combine_connections(data, combine, ci, n_comps=1):
+    """Combine data over connections."""
+    assert data.shape[0] / n_comps % 2 == 0, (
+        "Data to combine does not have a matching number of connections for each "
+        "component. Please contact the MNE-Connectivity developers."
+    )
+
+    if combine == "mean":
+        combine_func = lambda x: np.mean(x, axis=0)  # noqa: E731
+    else:
+        assert callable(combine), (
+            "The `combine` parameter is not callable as expected. "
+            "Please contact the MNE-Connectivity developers."
+        )
+        combine_func = combine
+
+    if ci == "sd":
+        ci_func = lambda x: np.std(x, axis=0)  # noqa: E731
+    elif ci == "range":
+        ci_func = lambda x: (np.min(x, axis=0), np.max(x, axis=0))  # noqa: E731
+    else:
+        assert isinstance(ci, int | float), (
+            "The `ci` parameter is not a float as expected. "
+            "Please contact the MNE-Connectivity developers."
+        )
+        ci_func = lambda x: tuple(_ci(x, ci=ci / 100))  # noqa: E731
+
+    data_combined = np.empty((n_comps, data.shape[1:]), dtype=data.dtype)
+    data_ci = np.empty(data_combined.shape + (2,), dtype=data.dtype)
+    for comp_idx in range(n_comps):
+        data_combined[comp_idx] = combine_func(data[::n_comps])
+        ci_out = ci_func(data[::n_comps])
+        if isinstance(ci_out, tuple):
+            assert len(ci_out) == 2, (
+                f"Expected `len(ci_out)` of 2, got {len(ci_out)}. "
+                "Please contact the MNE-Connectivity developers."
+            )
+            data_ci[comp_idx, ..., 0] = ci_out[0]
+            data_ci[comp_idx, ..., 1] = ci_out[1]
+        else:
+            data_ci[comp_idx, ..., 0] = data_combined[comp_idx] - ci_out
+            data_ci[comp_idx, ..., 1] = data_combined[comp_idx] + ci_out
+
+    if n_comps == 1:
+        con_names = np.array(["combined nodes"])
+        node_names = con_names.copy()
+        node_indices = (np.array([0]), np.array([0]))
+    else:
+        con_names = np.array(
+            [f"combined nodes (component {comp_idx})" for comp_idx in range(n_comps)]
+        )
+        node_names = con_names.copy()
+        node_indices = (np.arange(n_comps), np.arange(n_comps))
+
+    return data_combined, data_ci, con_names, node_names, node_indices
