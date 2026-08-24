@@ -226,7 +226,9 @@ def _combine_connections(data, combine, ci, n_comps=1):
         )
         combine_func = combine
 
-    if ci == "sd":
+    if ci is None:
+        ci_func = None
+    elif ci == "sd":
         ci_func = lambda x: np.std(x, axis=0)  # noqa: E731
     elif ci == "range":
         ci_func = lambda x: (np.min(x, axis=0), np.max(x, axis=0))  # noqa: E731
@@ -240,22 +242,25 @@ def _combine_connections(data, combine, ci, n_comps=1):
         )
 
     data_combined = np.empty((n_comps, *data.shape[1:]), dtype=data.dtype)
-    data_ci = np.empty(data_combined.shape + (2,), dtype=data.dtype)
+    data_ci = None
+    if ci_func is not None:
+        data_ci = np.empty(data_combined.shape + (2,), dtype=data.dtype)
     for comp_idx in range(n_comps):
         data_combined[comp_idx] = combine_func(
             data[n_cons * comp_idx : n_cons * (comp_idx + 1)]
         )
-        ci_out = ci_func(data[n_cons * comp_idx : n_cons * (comp_idx + 1)])
-        if isinstance(ci_out, tuple):
-            assert len(ci_out) == 2, (
-                f"Expected `len(ci_out)` of 2, got {len(ci_out)}. "
-                "Please contact the MNE-Connectivity developers."
-            )
-            data_ci[comp_idx, ..., 0] = ci_out[0]
-            data_ci[comp_idx, ..., 1] = ci_out[1]
-        else:
-            data_ci[comp_idx, ..., 0] = data_combined[comp_idx] - ci_out
-            data_ci[comp_idx, ..., 1] = data_combined[comp_idx] + ci_out
+        if ci_func is not None:
+            ci_out = ci_func(data[n_cons * comp_idx : n_cons * (comp_idx + 1)])
+            if isinstance(ci_out, tuple):
+                assert len(ci_out) == 2, (
+                    f"Expected `len(ci_out)` of 2, got {len(ci_out)}. "
+                    "Please contact the MNE-Connectivity developers."
+                )
+                data_ci[comp_idx, ..., 0] = ci_out[0]
+                data_ci[comp_idx, ..., 1] = ci_out[1]
+            else:
+                data_ci[comp_idx, ..., 0] = data_combined[comp_idx] - ci_out
+                data_ci[comp_idx, ..., 1] = data_combined[comp_idx] + ci_out
 
     if n_comps == 1:
         con_names = np.array(["combined nodes"])
