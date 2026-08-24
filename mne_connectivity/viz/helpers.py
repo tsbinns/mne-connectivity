@@ -190,7 +190,7 @@ def _add_comps_as_connections(data, con_info, node_indices, comps_axis):
     n_comps = data.shape[comps_axis]
     new_shape = (data.shape[0] * n_comps,)
     if comps_axis + 1 < data.ndim:
-        new_shape += (-1,)
+        new_shape += data.shape[comps_axis + 1 :]
     data = np.reshape(data, new_shape)
     node_indices = (
         np.repeat(node_indices[0], n_comps),
