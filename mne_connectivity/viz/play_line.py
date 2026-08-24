@@ -19,7 +19,7 @@ raw.pick("eeg").load_data()
 raw.resample(100)
 
 epochs = make_fixed_length_epochs(raw, duration=5.0)[:10]
-epochs.load_data().pick(np.arange(20))
+epochs.load_data().pick(np.arange(15))
 
 coeffs = epochs.compute_psd(output="complex", fmin=3)
 
@@ -28,7 +28,7 @@ con = SpectralConnectivity(
     np.abs(con.get_data()), con.freqs, con.n_nodes, con.names, con.indices
 )
 
-MULTIVAR = True
+MULTIVAR = False
 if MULTIVAR:
     con = SpectralConnectivity(
         np.concatenate(

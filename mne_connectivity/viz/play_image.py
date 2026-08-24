@@ -38,7 +38,7 @@ con = SpectroTemporalConnectivity(
     method=con.method,
 )
 
-MULTIVAR = False
+MULTIVAR = True
 if MULTIVAR:
     con = SpectroTemporalConnectivity(
         np.concatenate(
