@@ -16,6 +16,8 @@ from .helpers import (
     _get_node_names_and_indices,
     _handle_data_and_indices,
     _handle_picks,
+    _setup_cmap,
+    _setup_vmin_vmax,
 )
 
 _MATRIX_ANNOTATIONS = WeakKeyDictionary()
@@ -84,7 +86,7 @@ def plot_connectivity(
     vmin=None,
     vmax=None,
     cnorm=None,
-    cmap="viridis",
+    cmap=None,
     colorbar=True,
     node_labels="ticks",
     show=True,
@@ -131,7 +133,7 @@ def plot_connectivity(
         normalization.
     colorbar : bool (default True)
         Whether to display a colorbar for each figure.
-    cmap : str | instance of matplotlib.colors.Colormap (default "viridis")
+    cmap : str | instance of matplotlib.colors.Colormap | None
         The colormap to use for coloring the connectivity values.
     node_labels : ``'names'`` | ``'ticks'`` | None (default ``'ticks'``)
         How to label the nodes in the matrix along the x- and y-axes. If ``'names'``,
@@ -182,7 +184,7 @@ def plot_connectivity(
 
     # Add multivariate components as additional connections
     if is_multivar:
-        data, con_info, node_indices = _add_comps_as_connections(
+        data, con_info, node_indices, _ = _add_comps_as_connections(
             data, con_info, node_indices, comps_axis=1
         )
 
@@ -206,10 +208,10 @@ def plot_connectivity(
             square_matrix[type_node_pos[seed_idx], type_node_pos[target_idx]] = data[
                 idx
             ]
-        if vmin is None:
-            vmin = np.nanmin(square_matrix)
-        if vmax is None:
-            vmax = np.nanmax(square_matrix)
+
+        # Colormap handling
+        vmin, vmax = _setup_vmin_vmax(data=square_matrix, vmin=vmin, vmax=vmax)
+        cmap = _setup_cmap(cmap=cmap, vmin=vmin, vmax=vmax)
         if cnorm is None:
             cnorm = Normalize(vmin=vmin, vmax=vmax)
 
@@ -236,6 +238,9 @@ def plot_connectivity(
         else:
             ax.xaxis.set_major_locator(MaxNLocator(integer=True))
             ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+
+        ax.set_xlim(type_node_indices[1].min() - 0.5, type_node_indices[1].max() + 0.5)
+        ax.set_ylim(type_node_indices[0].max() + 0.5, type_node_indices[0].min() - 0.5)
 
         def callback(event, ax=ax, fig=fig, node_names=type_node_names):
             _plot_connectivity_matrix_onclick(event, ax, fig, node_names)

@@ -269,3 +269,51 @@ def _combine_connections(data, combine, ci, n_comps=1):
         node_indices = (np.arange(n_comps), np.arange(n_comps))
 
     return data_combined, data_ci, con_names, node_names, node_indices
+
+
+def _setup_vmin_vmax(data, vmin, vmax):
+    """Handle vmin and vmax parameters for visualizing connectivity.
+
+    For the normal use-case (when `vmin` and `vmax` are None):
+    - vlim is set to (-abs(max), abs(max)) when data has both pos and neg values.
+    - vlim is set to (min, max) when data is exclusively pos or neg values.
+
+    Otherwise, vmin and vmax are callables/pre-specified values that drive the
+    operation.
+    """
+    data = data[~np.isnan(data)]
+
+    if vmax is None and vmin is None:
+        if ~np.all(data >= 0) and ~np.all(data <= 0):
+            vmax = np.abs(data).max()
+            vmin = -vmax
+        else:
+            vmin, vmax = data.min(), data.max()
+
+    else:
+        if callable(vmin):
+            vmin = vmin(data)
+        elif vmin is None:
+            vmin = np.min(data)
+
+        if callable(vmax):
+            vmax = vmax(data)
+        elif vmax is None:
+            vmax = np.max(data)
+
+    return vmin, vmax
+
+
+def _setup_cmap(cmap, vmin, vmax):
+    """Handle colormap for visualizing connectivity."""
+    if isinstance(cmap, tuple):
+        return cmap
+
+    if cmap is None:
+        if vmin >= 0 and vmax >= 0:
+            return "Reds"
+        if vmin < 0 and vmax < 0:
+            return "Blues_r"
+        return "RdBu_r"
+
+    return cmap
