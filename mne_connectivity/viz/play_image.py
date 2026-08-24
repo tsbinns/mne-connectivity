@@ -1,0 +1,80 @@
+from os import path as op
+
+import numpy as np
+from image import plot_spectro_temporal_connectivity
+from matplotlib import pyplot as plt
+from mne import make_fixed_length_epochs
+from mne.datasets import sample
+from mne.io import read_raw_fif
+
+from mne_connectivity import SpectroTemporalConnectivity, spectral_connectivity_epochs
+
+data_path = sample.data_path()
+raw_fname = op.join(data_path, "MEG", "sample", "sample_audvis_filt-0-40_raw.fif")
+
+# Setup for reading the raw data
+raw = read_raw_fif(raw_fname)
+
+raw.pick("eeg").load_data()
+raw.resample(100)
+
+epochs = make_fixed_length_epochs(raw, duration=5.0)[:10]
+epochs.load_data().pick(np.arange(20))
+
+fmax = 40
+freqs = np.arange(3, fmax)
+coeffs = epochs.compute_tfr(
+    method="morlet", output="complex", freqs=freqs, n_cycles=freqs / 2
+)
+
+con = spectral_connectivity_epochs(coeffs, method="imcoh", fmax=fmax)
+con = SpectroTemporalConnectivity(
+    np.abs(con.get_data()),
+    con.freqs,
+    con.times,
+    con.n_nodes,
+    con.names,
+    con.indices,
+    method=con.method,
+)
+
+MULTIVAR = False
+if MULTIVAR:
+    con = SpectroTemporalConnectivity(
+        np.concatenate(
+            (
+                np.concatenate(
+                    [
+                        con.get_data().mean(0, keepdims=True)[:, None, :, :],
+                        con.get_data().mean(0, keepdims=True)[:, None, :, :] * 0.5,
+                    ],
+                    axis=1,
+                ),
+                np.concatenate(
+                    [
+                        con.get_data().mean(0, keepdims=True)[:, None, :, :] * -1,
+                        con.get_data().mean(0, keepdims=True)[:, None, :, :] * -0.5,
+                    ],
+                    axis=1,
+                ),
+            ),
+            axis=0,
+        ),
+        con.freqs,
+        con.times,
+        con.n_nodes,
+        con.names,
+        indices=(
+            np.array((np.arange(0, 10), np.arange(10, 20))),
+            np.array((np.arange(0, 10), np.arange(10, 20))),
+        ),
+        components=np.arange(2),
+        method="imcoh",
+    )
+
+fig = plot_spectro_temporal_connectivity(con, info=epochs.info, combine="mean")
+
+
+plt.show(block=True)
+
+print("jeff")

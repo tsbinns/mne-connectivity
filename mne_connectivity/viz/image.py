@@ -1,73 +1,106 @@
+from collections.abc import Callable
+
 import mne
+import numpy as np
+from matplotlib import pyplot as plt
 from mne._fiff.pick import pick_info
 from mne.utils.check import _check_option, _validate_type
-from mne.viz.topo import _imshow_tfr
+from mne.utils.numerics import _time_mask
+from mne.viz.utils import _plot_masked_image
 
-from mne_connectivity import (
-    EpochSpectralConnectivity,
-    EpochTemporalConnectivity,
-    SpectroTemporalConnectivity,
-)
-
-from .helpers import (
+from mne_connectivity import SpectroTemporalConnectivity
+from mne_connectivity.viz.helpers import (
     _add_comps_as_connections,
     _check_data_is_real,
     _check_info,
+    _combine_connections,
     _get_con_info,
     _get_node_names_and_indices,
     _handle_data_and_indices,
     _handle_picks,
+    _setup_cmap,
+    _setup_vmin_vmax,
 )
 
 
-def plot_epoch_spectral_connectivity(con):
-    """Plot epoch spectral connectivity."""
-    _validate_type(con, EpochSpectralConnectivity, "con", "EpochSpectralConnectivity")
-
-    _plot_image_connectivity(
-        con,
-        x_vals=con.freqs,
-        y_vals=con.epochs,
-        x_label="Frequency (Hz)",
-        y_label="Epochs",
-    )
-
-
-def plot_epoch_temporal_connectivity(con):
-    """Plot epoch temporal connectivity."""
-    _validate_type(con, EpochTemporalConnectivity, "con", "EpochTemporalConnectivity")
-
-    _plot_image_connectivity(
-        con, x_vals=con.times, y_vals=con.epochs, x_label="Time (s)", y_label="Epochs"
-    )
-
-
-def plot_spectro_temporal_connectivity(con):
+def plot_spectro_temporal_connectivity(
+    con,
+    picks=None,
+    exclude="bads",
+    info=None,
+    combine="mean",
+    node_aliases=None,
+    tmin=None,
+    tmax=None,
+    fmin=None,
+    fmax=None,
+    yscale="auto",
+    vmin=None,
+    vmax=None,
+    cnorm=None,
+    cmap=None,
+    colorbar=True,
+    mask=None,
+    mask_style=None,
+    mask_cmap="Greys",
+    mask_alpha=0.1,
+    show=True,
+):
     """Plot spectro-temporal connectivity."""
     _validate_type(
         con, SpectroTemporalConnectivity, "con", "SpectroTemporalConnectivity"
     )
 
-    _plot_image_connectivity(
-        con,
-        x_vals=con.times,
-        y_vals=con.freqs,
-        x_label="Time (s)",
-        y_label="Frequency (Hz)",
+    return _plot_image_connectivity(
+        con=con,
+        picks=picks,
+        exclude=exclude,
+        info=info,
+        combine=combine,
+        node_aliases=node_aliases,
+        xlim=(tmin, tmax),
+        ylim=(fmin, fmax),
+        xvar=con.times,
+        yvar=con.freqs,
+        xlabel="Time (s)",
+        ylabel="Frequency (Hz)",
+        yscale=yscale,
+        vmin=vmin,
+        vmax=vmax,
+        cnorm=cnorm,
+        cmap=cmap,
+        colorbar=colorbar,
+        mask=mask,
+        mask_style=mask_style,
+        mask_cmap=mask_cmap,
+        mask_alpha=mask_alpha,
+        show=show,
     )
 
 
 def _plot_image_connectivity(
     con,
-    info,
     picks,
     exclude,
+    info,
+    combine,
     node_aliases,
     xlim,
-    x_vals,
-    y_vals,
-    x_label,
-    y_label,
+    ylim,
+    xvar,
+    xlabel,
+    yvar,
+    ylabel,
+    yscale,
+    vmin,
+    vmax,
+    cnorm,
+    cmap,
+    colorbar,
+    mask,
+    mask_style,
+    mask_cmap,
+    mask_alpha,
     show,
 ):
     """Plot connectivity as image plots.
@@ -81,12 +114,20 @@ def _plot_image_connectivity(
 
     _validate_type(info, (mne.Info, None), "`info`", "mne.Info or None")
 
+    _validate_type(combine, (str, Callable, None), "`combine`")
+    if isinstance(combine, str):
+        _check_option("combine", combine, ["mean"], " as a string")
+
     _validate_type(node_aliases, (dict, None), "`node_aliases`", "dict or None")
 
-    if not isinstance(xlim, str):
-        _check_option("xlim", len(xlim), [2], " length")
-    else:
-        _check_option("xlim", xlim, ["tight"], " as a str")
+    _check_option("xlim", len(xlim), [2], " length")
+    _check_option("ylim", len(ylim), [2], " length")
+
+    _check_option("yscale", yscale, ["linear", "log", "auto"])
+
+    _validate_type(mask, (np.ndarray, None), "`mask`", "numpy.ndarray or None")
+
+    _validate_type(colorbar, bool, "`colorbar`", "bool")
 
     _validate_type(show, bool, "`show`", "bool")
 
@@ -110,33 +151,96 @@ def _plot_image_connectivity(
     con_info["temp"]["con_types"] = con_info["temp"]["con_types"][picks]
 
     # Add multivariate components as additional connections
-    if data.ndim == 3:
-        data, con_info, node_indices = _add_comps_as_connections(
+    n_comps = 1
+    if data.ndim == 4:
+        data, con_info, node_indices, n_comps = _add_comps_as_connections(
             data, con_info, node_indices, comps_axis=1
         )
 
-    # con_types = con_info["temp"]["con_types"]
-    # figs = []
+    if mask is not None and mask.shape != data.shape[1:]:
+        raise ValueError(
+            f"Mask shape {mask.shape} does not match data shape {data.shape[1:]}."
+        )
 
-    _imshow_tfr(
-        ax=axes[ix],
-        tfr=data[[ix]],
-        ch_idx=0,
-        tmin=x_vals[0],
-        tmax=x_vals[-1],
-        vmin=vmin,
-        vmax=vmax,
-        onselect=None,
-        ylim=None,
-        freq=y_vals,
-        x_label=x_label,
-        y_label=y_label,
-        colorbar=colorbar,
-        cmap=cmap,
-        yscale=yscale,
-        mask=mask,
-        mask_style=mask_style,
-        mask_cmap=mask_cmap,
-        mask_alpha=mask_alpha,
-        cnorm=cnorm,
-    )
+    # Get x and y var masks
+    xvar, yvar = np.asarray(xvar), np.asarray(yvar)
+    xvar_mask = np.nonzero(
+        _time_mask(
+            times=xvar, tmin=xlim[0], tmax=xlim[1], sfreq=None, include_tmax=True
+        )
+    )[0]
+    yvar_mask = np.nonzero(
+        _time_mask(
+            times=yvar, tmin=ylim[0], tmax=ylim[1], sfreq=None, include_tmax=True
+        )
+    )[0]
+
+    # Mask data to relevant x and y values
+    data = data[..., yvar_mask, :][..., xvar_mask]
+    if mask is not None:
+        mask = mask[yvar_mask, :][:, xvar_mask]
+
+    con_types = con_info["temp"]["con_types"]
+    figs = []
+    axes = []
+    for con_type in np.unique(con_types):
+        # Prepare connectivity info for plotting
+        type_mask = con_types == con_type
+        type_data = data[type_mask]
+        type_con_names = np.array(con_info["ch_names"])[type_mask]
+
+        # Combine connectivity across connections
+        if combine is not None:
+            (
+                type_data,
+                _,
+                type_con_names,
+                _,
+                _,
+            ) = _combine_connections(
+                data=type_data, combine=combine, ci=None, n_comps=n_comps
+            )
+
+        # Colormap handling
+        vmin, vmax = _setup_vmin_vmax(data=type_data, vmin=vmin, vmax=vmax)
+        cmap = _setup_cmap(cmap=cmap, vmin=vmin, vmax=vmax)
+
+        # Plot connectivity as image
+        type_figs = [
+            plt.figure(layout="constrained") for _ in range(type_data.shape[0])
+        ]
+        type_axes = [fig.add_subplot() for fig in type_figs]
+        for con_idx in range(type_data.shape[0]):
+            con_ax = type_axes[con_idx]
+            img, _ = _plot_masked_image(
+                ax=con_ax,
+                data=type_data[con_idx],
+                times=xvar[xvar_mask],
+                mask=mask,
+                yvals=yvar[yvar_mask],
+                cmap=cmap,
+                vmin=vmin,
+                vmax=vmax,
+                mask_style=mask_style,
+                mask_alpha=mask_alpha,
+                mask_cmap=mask_cmap,
+                yscale=yscale,
+                cnorm=cnorm,
+            )
+            con_ax.set_xlabel(xlabel)
+            con_ax.set_ylabel(ylabel)
+            if colorbar:
+                con_ax.get_figure().colorbar(
+                    mappable=img, ax=type_axes[con_idx], label="Connectivity (A.U.)"
+                )
+            con_ax.set_title(f"{type_con_names[con_idx]} {con_method}")
+
+        figs.extend(type_figs)
+        axes.extend(type_axes)
+
+    if show:
+        plt.show()
+
+    if len(figs) == 1:
+        return figs[0], axes[0]
+    return figs, axes
