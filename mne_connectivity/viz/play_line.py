@@ -23,7 +23,7 @@ epochs.load_data().pick(np.arange(20))
 
 coeffs = epochs.compute_psd(output="complex", fmin=3)
 
-con = spectral_connectivity_epochs(coeffs, method="imcoh", fmax=40, fskip=1)
+con = spectral_connectivity_epochs(coeffs, method="imcoh", fmax=40)
 con = SpectralConnectivity(
     np.abs(con.get_data()), con.freqs, con.n_nodes, con.names, con.indices
 )
@@ -61,7 +61,13 @@ if MULTIVAR:
     )
 
 fig = plot_spectral_connectivity(
-    con, info=epochs.info, picks=None, node_selection="seeds_and_targets", show=False
+    con,
+    info=epochs.info,
+    picks=None,
+    node_selection="seeds_and_targets",
+    show=False,
+    fmin=10,
+    fmax=20,
 )
 
 

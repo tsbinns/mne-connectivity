@@ -6,6 +6,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from mne._fiff.pick import pick_info
 from mne.utils.check import _check_option, _validate_type
+from mne.utils.numerics import _time_mask
 from mne.viz.circle import _plot_connectivity_circle
 from mne.viz.evoked import _butterfly_on_button_press, _butterfly_onpick
 
@@ -28,20 +29,12 @@ def plot_spectral_connectivity(
     info=None,
     combine=None,
     ci="sd",
+    fmin=None,
+    fmax=None,
     node_aliases=None,
     node_selection="seeds_and_targets",
-    node_width=None,
-    node_height=1.0,
-    node_linewidth=2.0,
-    node_colors="black",
-    node_edgecolor="white",
     connection_colors="auto",
     connection_colormap="turbo",
-    linewidth_lineplot=0.5,
-    linewidth_circleplot=1.5,
-    fontsize_names=8,
-    circleplot_padding=6.0,
-    xlim="tight",
     highlight=None,
     interactive=True,
     show=True,
@@ -58,20 +51,11 @@ def plot_spectral_connectivity(
         info=info,
         combine=combine,
         ci=ci,
+        xlim=(fmin, fmax),
         node_aliases=node_aliases,
         node_selection=node_selection,
-        node_width=node_width,
-        node_height=node_height,
-        node_linewidth=node_linewidth,
-        node_colors=node_colors,
-        node_edgecolor=node_edgecolor,
         connection_colors=connection_colors,
         connection_colormap=connection_colormap,
-        linewidth_lineplot=linewidth_lineplot,
-        linewidth_circleplot=linewidth_circleplot,
-        fontsize_names=fontsize_names,
-        circleplot_padding=circleplot_padding,
-        xlim=xlim,
         highlight=highlight,
         interactive=interactive,
         show=show,
@@ -87,20 +71,12 @@ def plot_temporal_connectivity(
     info=None,
     combine=None,
     ci="sd",
+    tmin=None,
+    tmax=None,
     node_aliases=None,
     node_selection="seeds_and_targets",
-    node_width=None,
-    node_height=1.0,
-    node_linewidth=2.0,
-    node_colors="black",
-    node_edgecolor="white",
     connection_colors="auto",
     connection_colormap="turbo",
-    linewidth_lineplot=0.5,
-    linewidth_circleplot=1.5,
-    fontsize_names=8,
-    circleplot_padding=6.0,
-    xlim="tight",
     highlight=None,
     interactive=True,
     show=True,
@@ -117,20 +93,11 @@ def plot_temporal_connectivity(
         info=info,
         combine=combine,
         ci=ci,
+        xlim=(tmin, tmax),
         node_aliases=node_aliases,
         node_selection=node_selection,
-        node_width=node_width,
-        node_height=node_height,
-        node_linewidth=node_linewidth,
-        node_colors=node_colors,
-        node_edgecolor=node_edgecolor,
         connection_colors=connection_colors,
         connection_colormap=connection_colormap,
-        linewidth_lineplot=linewidth_lineplot,
-        linewidth_circleplot=linewidth_circleplot,
-        fontsize_names=fontsize_names,
-        circleplot_padding=circleplot_padding,
-        xlim=xlim,
         highlight=highlight,
         interactive=interactive,
         show=show,
@@ -146,20 +113,11 @@ def _plot_line_connectivity(
     info,
     combine,
     ci,
+    xlim,
     node_aliases,
     node_selection,
-    node_width,
-    node_height,
-    node_linewidth,
-    node_colors,
-    node_edgecolor,
     connection_colors,
     connection_colormap,
-    linewidth_lineplot,
-    linewidth_circleplot,
-    fontsize_names,
-    circleplot_padding,
-    xlim,
     highlight,
     interactive,
     show,
@@ -192,16 +150,9 @@ def _plot_line_connectivity(
         "node_selection", node_selection, ["seeds_and_targets", "seeds", "targets"]
     )
 
-    node_colors = [node_colors]  # downstream expects list
-
     _check_option(
         "connection_colors", connection_colors, ["auto", "global", "relative"]
     )
-
-    if not isinstance(xlim, str):
-        _check_option("xlim", len(xlim), [2], " length")
-    else:
-        _check_option("xlim", xlim, ["tight"], " as a string")
 
     _validate_type(highlight, ("array-like", None), "`highlight`", "array-like or None")
     if highlight is not None:
@@ -237,6 +188,16 @@ def _plot_line_connectivity(
         data, con_info, node_indices, n_comps = _add_comps_as_connections(
             data, con_info, node_indices, comps_axis=1
         )
+
+    # Mask data to relevant x values
+    xvar = np.asarray(xvar)
+    xvar_mask = np.nonzero(
+        _time_mask(
+            times=xvar, tmin=xlim[0], tmax=xlim[1], sfreq=None, include_tmax=True
+        )
+    )[0]
+    data = data[..., xvar_mask]
+    xvar = xvar[xvar_mask]
 
     con_types = con_info["temp"]["con_types"]
     figs = []
@@ -307,18 +268,18 @@ def _plot_line_connectivity(
                 con=circle_con,
                 node_names=circle_names,
                 indices=circle_indices,
-                node_width=node_width,
-                node_height=node_height,
-                node_colors=node_colors,
-                node_edgecolor=node_edgecolor,
-                node_linewidth=node_linewidth,
-                facecolor="w",
-                textcolor="k",
+                node_width=None,
+                node_height=1.0,
+                node_colors=["black"],  # expects list
+                node_edgecolor="white",
+                node_linewidth=2.0,
+                facecolor="white",
+                textcolor="black",
                 colormap=connection_colormap,
                 colorbar=False,
-                linewidth=linewidth_circleplot,
-                fontsize_names=fontsize_names,
-                padding=circleplot_padding,
+                linewidth=1.5,
+                fontsize_names=8,
+                padding=6.0,
                 ax=circle_ax,
                 interactive=False,  # use our modified callback
                 title=(
@@ -343,15 +304,13 @@ def _plot_line_connectivity(
             duplicate_cons=duplicate_cons,
             fig=fig,
             ax=line_ax,
-            xlim=xlim,
-            ylim=None,
             xvar=xvar,
             xlabel=xlabel,
             title=f"{con_type} {con_method}",
             interactive=interactive,
             line_alpha=0.75,
             ci_alpha=0.3,
-            linewidth=linewidth_lineplot,
+            linewidth=2.0,
             highlight=highlight,
         )
 
@@ -368,13 +327,19 @@ def _plot_line_connectivity(
                 circle_con_order=circle_con_order,
                 node_selection=node_selection,
                 node_selectability=node_is_selectable,
+                has_ci=type_ci is not None,
             )
             fig.canvas.mpl_connect("button_press_event", callback)
 
         # Hide duplicate connections initially
         if plot_circle and duplicate_cons:
             _hide_duplicate_cons(
-                fig, circle_ax, line_ax, len(type_data), circle_con_order
+                fig,
+                circle_ax,
+                line_ax,
+                len(type_data),
+                circle_con_order,
+                has_ci=type_ci is not None,
             )
 
         figs.append(fig)
@@ -486,6 +451,7 @@ def _plot_connectivity_circle_onpick(
     circle_con_order,
     node_selection,
     node_selectability,
+    has_ci,
     ylim=(9, 10),
 ):
     """Isolate connections for a single node and reflect this in the line plot.
@@ -526,7 +492,8 @@ def _plot_connectivity_circle_onpick(
             patches[circle_idx].set_visible(visible)
             lines[line_idx].set_visible(visible)
             lines[line_idx].set_picker(0 if not visible else True)
-            collections[line_idx].set_visible(visible)
+            if has_ci:
+                collections[line_idx].set_visible(visible)
         fig.canvas.draw()
 
     elif event.button == 3:  # right click
@@ -537,20 +504,22 @@ def _plot_connectivity_circle_onpick(
             patches[circle_idx].set_visible(visible)
             lines[line_idx].set_visible(visible)
             lines[line_idx].set_picker(0 if not visible else True)
-            collections[line_idx].set_visible(visible)
+            if has_ci:
+                collections[line_idx].set_visible(visible)
         for text in line_ax.texts:
             text.set_alpha(0)  # hide any connection labels
         fig.canvas.draw()
 
 
-def _hide_duplicate_cons(fig, circle_ax, line_ax, n_cons, circle_con_order):
+def _hide_duplicate_cons(fig, circle_ax, line_ax, n_cons, circle_con_order, has_ci):
     """Hide duplicated connections in circle and line plots."""
     for circle_idx, line_idx in enumerate(circle_con_order):
         if line_idx >= n_cons:
             circle_ax.patches[circle_idx].set_visible(False)
             line_ax.lines[line_idx].set_visible(False)
             line_ax.lines[line_idx].set_picker(False)
-            line_ax.collections[line_idx].set_visible(False)
+            if has_ci:
+                line_ax.collections[line_idx].set_visible(False)
     fig.canvas.draw()
 
 
@@ -562,8 +531,6 @@ def _plot_connectivity_lines(
     duplicate_cons,
     fig,
     ax,
-    xlim,
-    ylim,
     xvar,
     xlabel,
     title,
@@ -649,6 +616,8 @@ def _plot_connectivity_lines(
             )
             lines[-1].set_pickradius(3.0)
 
+    ax.set_xlim(xvar[0], xvar[-1])
+
     ax.set_xlabel(xlabel)
     ax.set_ylabel("Connectivity (A.U.)")
     texts.append(
@@ -665,17 +634,11 @@ def _plot_connectivity_lines(
         )
     )
 
-    if xlim is not None:
-        if xlim == "tight":
-            xlim = (xvar[0], xvar[-1])
-        ax.set_xlim(xlim)
-    if ylim is not None:
-        ax.set_ylim(ylim)
     ax.set_title(title)
 
     # Plot highlights
     if highlight is not None:
-        this_ylim = ax.get_ylim() if (ylim is None) else ylim
+        this_ylim = ax.get_ylim()
         for this_highlight in highlight:
             ax.fill_betweenx(
                 this_ylim,
