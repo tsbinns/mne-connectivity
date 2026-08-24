@@ -162,7 +162,7 @@ def _plot_image_connectivity(
             f"Mask shape {mask.shape} does not match data shape {data.shape[1:]}."
         )
 
-    # Get x and y var masks
+    # Mask data to relevant x and y values
     xvar, yvar = np.asarray(xvar), np.asarray(yvar)
     xvar_mask = np.nonzero(
         _time_mask(
@@ -174,8 +174,6 @@ def _plot_image_connectivity(
             times=yvar, tmin=ylim[0], tmax=ylim[1], sfreq=None, include_tmax=True
         )
     )[0]
-
-    # Mask data to relevant x and y values
     data = data[..., yvar_mask, :][..., xvar_mask]
     if mask is not None:
         mask = mask[yvar_mask, :][:, xvar_mask]
