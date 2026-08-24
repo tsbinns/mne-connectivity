@@ -40,7 +40,7 @@ def _handle_data_and_indices(con, ch_info):
             indices = np.tril_indices(n_chans, -1)
             square_shape = (n_chans, n_chans)
             if data.ndim > 1:
-                square_shape += (-1,)
+                square_shape += data.shape[1:]
             data = data.reshape(*square_shape)[indices]
 
         # Drop entries for bad channels from all-to-all data/indices
