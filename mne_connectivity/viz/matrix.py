@@ -9,6 +9,7 @@ from mne._fiff.pick import pick_info
 from mne.utils.check import _check_option, _validate_type
 from mne.viz.utils import _plot_masked_image
 
+from ..utils import fill_doc
 from .helpers import (
     _add_comps_as_connections,
     _check_data_is_real,
@@ -22,12 +23,14 @@ from .helpers import (
 )
 
 
+@fill_doc
 def plot_connectivity(
     con,
+    *,
+    info=None,
     picks=None,
     selection="both",
     exclude="bads",
-    info=None,
     node_aliases=None,
     vmin=None,
     vmax=None,
@@ -47,59 +50,29 @@ def plot_connectivity(
     ----------
     con : Connectivity
         The connectivity object to plot.
-    picks : str | array_like | slice | None (default None)
-        Channels to include in the plot. All connections involving these channels will
-        be included. Slices and lists of integers will be interpreted as channel
-        indices. In lists, channel type strings (e.g., ``['meg', 'eeg']``) will pick
-        channels of those types, channel name strings (e.g., ``['MEG0111', 'MEG2623']``
-        will pick the given channels. Can also be the string values ``'all'`` to pick
-        all channels, or ``'data'`` to pick data channels. None will pick any good
-        channels. Note that channels in ``info['bads']`` will be included if their names
-        or indices are explicitly provided.
-    exclude : list of str | ``'bads'`` (default ``'bads'``)
-        Channel names to exclude from plotting. All connections involving these channels
-        will be excluded. If ``'bads'``, channels in ``info['bads']`` are excluded. Pass
-        an empty list to include all channels (including bad channels, if any).
-    info : mne.Info | None (default None)
-        The :class:`mne.Info` object with information about the sensors and methods of
-        measurement. Used to split the figures by channel types and identify bad
-        channels.
-    node_aliases : dict | None
-        Mapping of node indices to node names. Keys should be seed or target indices
-        found in ``con.indices``, that is, ints for bivariate connectivity, and arrays
-        of ints for multivariate connectivity. If ``None`` and plotting results for
-        bivariate connectivity, node names will be taken from ``con.names``. If ``None``
-        and plotting results for multivariate connectivity, node names will be generated
-        as ``'node {idx}'``, where ``idx`` is the order of the node in the unique set of
-        indices, as determined by ``np.unique([*con.indices[0], *con.indices[1]])``.
-    vmin : float | None (default None)
-        Minimum value for the colormap. If ``None``, it is determined automatically.
-    vmax : float | None (default None)
-        Maximum value for the colormap. If ``None``, it is determined automatically.
-    cnorm : matplotlib.colors.Normalize | None
-        How to normalize the colormap. If ``None``, standard linear normalization is
-        performed. If not ``None``, ``vmin`` and ``vmax`` will be ignored. See
-        :ref:`Matplotlib docs <matplotlib:colormapnorms>` for more details on colormap
-        normalization.
-    colorbar : bool (default True)
-        Whether to display a colorbar for each figure.
-    cmap : str | instance of matplotlib.colors.Colormap | None
-        The colormap to use for coloring the connectivity values.
-    node_labels : ``'names'`` | ``'ticks'`` | None (default ``'ticks'``)
-        How to label the nodes in the matrix along the x- and y-axes. If ``'names'``,
-        each node's name is shown. Note that for many nodes, this can lead to
-        overlapping labels. If ``'ticks'``, the indices of the nodes are shown at evenly
-        spaced intervals. Note that for many nodes, not all may have labels. If
-        ``None``, no labels are shown.
-    show : bool (default True)
-        Whether to show the figure(s).
+    %(viz_info)s
+    %(viz_picks)s
+    %(viz_selection)s
+    %(viz_exclude)s
+    %(viz_node_aliases)s
+    %(viz_node_vmin_vmax)s
+    %(viz_cnorm)s
+    %(viz_cmap)s
+    %(viz_cbar)s
+    %(viz_node_labels_matrix)s
+    %(viz_mask)s
+    %(viz_mask_style)s
+    %(viz_mask_cmap)s
+    %(viz_mask_alpha)s
+    %(viz_show)s
+
+    Returns
+    -------
+    %(viz_figures)s
 
     Notes
     -----
-    Plotting for multivariate connectivity is handled by treating each component of the
-    multivariate connections as a separate connection. The names of the nodes are
-    differentiated by the addition of the component number to the node name, e.g.,
-    ``'node 0 (component 0)', 'node 0 (component 1)', ...``.
+    %(viz_components_note)s
     """
     from mne_connectivity import Connectivity
 
@@ -142,7 +115,6 @@ def plot_connectivity(
 
     con_types = con_info["temp"]["con_types"]
     figs = []
-    axes = []
     for con_type in np.unique(con_types):
         # Prepare connectivity info for plotting
         type_mask = con_types == con_type
@@ -216,14 +188,13 @@ def plot_connectivity(
         fig.canvas.mpl_connect("button_press_event", callback)
 
         figs.append(fig)
-        axes.append(ax)
 
     if show:
         plt.show()
 
     if len(figs) == 1:
-        return figs[0], axes[0]
-    return figs, axes
+        return figs[0]
+    return figs
 
 
 _MATRIX_ANNOTATIONS = WeakKeyDictionary()

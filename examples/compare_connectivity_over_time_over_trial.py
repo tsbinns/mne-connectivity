@@ -377,7 +377,7 @@ global_con_epochs = TemporalConnectivity(
     con_epochs.indices,
     con_epochs.method,
 )
-plot_temporal_connectivity(global_con_epochs, info=epochs.info, linewidth_lineplot=2)
+plot_temporal_connectivity(global_con_epochs, info=epochs.info)
 
 # Get the timepoint with highest global connectivity right after stimulus
 t_con_max = np.argmax(global_con_epochs_array[0, np.array(con_epochs.times) <= 0.5])

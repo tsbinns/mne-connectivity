@@ -197,7 +197,7 @@ freqs = gc_ab.freqs
 
 # %%
 
-fig, axes = plot_spectral_connectivity(gc_ab, info=epochs.info, linewidth_lineplot=2)
+fig, axes = plot_spectral_connectivity(gc_ab, info=epochs.info)
 axes[0].set_title("Granger causality: A → B")
 
 ###############################################################################
@@ -229,7 +229,7 @@ net_gc = SpectralConnectivity(
     method="Net GC",
 )
 
-fig, axes = plot_spectral_connectivity(net_gc, info=epochs.info, linewidth_lineplot=2)
+fig, axes = plot_spectral_connectivity(net_gc, info=epochs.info)
 axes[0].plot((freqs[0], freqs[-1]), (0, 0), linewidth=2, linestyle="--", color="k")
 axes[0].set_title("Net Granger causality: A → B\n[A → B] - [B → A]")
 
@@ -329,7 +329,7 @@ trgc = SpectralConnectivity(
 
 # %%
 
-fig, axes = plot_spectral_connectivity(trgc, info=epochs.info, linewidth_lineplot=2)
+fig, axes = plot_spectral_connectivity(trgc, info=epochs.info)
 axes[0].plot((freqs[0], freqs[-1]), (0, 0), linewidth=2, linestyle="--", color="k")
 axes[0].set_title(
     "Net time-reversed Granger causality: A → B\nnet[A → B] - net time-reversed[A → B]"

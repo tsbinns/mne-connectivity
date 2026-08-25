@@ -10,7 +10,8 @@ from mne.utils.numerics import _time_mask
 from mne.viz.circle import _plot_connectivity_circle
 from mne.viz.evoked import _butterfly_on_button_press, _butterfly_onpick
 
-from mne_connectivity.viz.helpers import (
+from ..utils import fill_doc
+from .helpers import (
     _add_comps_as_connections,
     _check_data_is_real,
     _check_info,
@@ -22,40 +23,70 @@ from mne_connectivity.viz.helpers import (
 )
 
 
+@fill_doc
 def plot_spectral_connectivity(
     con,
+    *,
+    info=None,
     picks=None,
     selection="both",
     exclude="bads",
-    info=None,
     combine=None,
     ci="sd",
     fmin=None,
     fmax=None,
     node_aliases=None,
-    connection_colors="auto",
-    connection_colormap="turbo",
+    colors="auto",
+    cmap="turbo",
     highlight=None,
     interactive=True,
     show=True,
 ):
-    """Plot spectral connectivity as line plots with circle plot overviews."""
+    """Plot spectral connectivity as line plots, with circle plot overviews.
+
+    Parameters
+    ----------
+    con : SpectralConnectivity
+        The spectral connectivity object to plot.
+    %(viz_info)s
+    %(viz_picks)s
+    %(viz_selection_line)s
+    %(viz_exclude)s
+    %(viz_combine_line_spectral)s
+    %(viz_ci)s
+    %(viz_fmin_fmax)s
+    %(viz_node_aliases)s
+    %(viz_colors_line)s
+    %(viz_cmap_line)s
+    %(viz_highlight)s
+    %(viz_interactive)s
+    %(viz_show)s
+
+    Returns
+    -------
+    %(viz_figures)s
+
+    Notes
+    -----
+    %(viz_circle_line_note)s
+    %(viz_components_note)s
+    """
     from mne_connectivity import SpectralConnectivity
 
     _validate_type(con, SpectralConnectivity, "con", "SpectralConnectivity")
 
     return _plot_line_connectivity(
         con=con,
+        info=info,
         picks=picks,
         selection=selection,
         exclude=exclude,
-        info=info,
         combine=combine,
         ci=ci,
         xlim=(fmin, fmax),
         node_aliases=node_aliases,
-        connection_colors=connection_colors,
-        connection_colormap=connection_colormap,
+        colors=colors,
+        cmap=cmap,
         highlight=highlight,
         interactive=interactive,
         show=show,
@@ -64,40 +95,70 @@ def plot_spectral_connectivity(
     )
 
 
+@fill_doc
 def plot_temporal_connectivity(
     con,
+    *,
+    info=None,
     picks=None,
     selection="both",
     exclude="bads",
-    info=None,
     combine=None,
     ci="sd",
     tmin=None,
     tmax=None,
     node_aliases=None,
-    connection_colors="auto",
-    connection_colormap="turbo",
+    colors="auto",
+    cmap="turbo",
     highlight=None,
     interactive=True,
     show=True,
 ):
-    """Plot temporal connectivity as line plots with circle plot overviews."""
+    """Plot temporal connectivity as line plots, with circle plot overviews.
+
+    Parameters
+    ----------
+    con : TemporalConnectivity
+        The temporal connectivity object to plot.
+    %(viz_info)s
+    %(viz_picks)s
+    %(viz_selection_line)s
+    %(viz_exclude)s
+    %(viz_combine_line_temporal)s
+    %(viz_ci)s
+    %(viz_tmin_tmax)s
+    %(viz_node_aliases)s
+    %(viz_colors_line)s
+    %(viz_cmap_line)s
+    %(viz_highlight)s
+    %(viz_interactive)s
+    %(viz_show)s
+
+    Returns
+    -------
+    %(viz_figures)s
+
+    Notes
+    -----
+    %(viz_circle_line_note)s
+    %(viz_components_note)s
+    """
     from mne_connectivity import TemporalConnectivity
 
     _validate_type(con, TemporalConnectivity, "con", "TemporalConnectivity")
 
     return _plot_line_connectivity(
         con=con,
+        info=info,
         picks=picks,
         selection=selection,
         exclude=exclude,
-        info=info,
         combine=combine,
         ci=ci,
         xlim=(tmin, tmax),
         node_aliases=node_aliases,
-        connection_colors=connection_colors,
-        connection_colormap=connection_colormap,
+        colors=colors,
+        cmap=cmap,
         highlight=highlight,
         interactive=interactive,
         show=show,
@@ -108,16 +169,16 @@ def plot_temporal_connectivity(
 
 def _plot_line_connectivity(
     con,
+    info,
     picks,
     selection,
     exclude,
-    info,
     combine,
     ci,
     xlim,
     node_aliases,
-    connection_colors,
-    connection_colormap,
+    colors,
+    cmap,
     highlight,
     interactive,
     show,
@@ -149,9 +210,7 @@ def _plot_line_connectivity(
 
     _validate_type(node_aliases, (dict, None), "`node_aliases`", "dict or None")
 
-    _check_option(
-        "connection_colors", connection_colors, ["auto", "global", "relative"]
-    )
+    _check_option("colors", colors, ["auto", "global", "relative"])
 
     _validate_type(highlight, ("array-like", None), "`highlight`", "array-like or None")
     if highlight is not None:
@@ -248,12 +307,12 @@ def _plot_line_connectivity(
                     np.concatenate([circle_indices[0], circle_indices[1]]),
                     np.concatenate([circle_indices[1], circle_indices[0]]),
                 )
-            if connection_colors == "auto":
+            if colors == "auto":
                 type_connection_colors = (
                     "relative" if is_all_to_all and interactive else "global"
                 )
             else:
-                type_connection_colors = connection_colors
+                type_connection_colors = colors
             circle_con, circle_con_order = _get_circle_con(
                 circle_indices, n_circle_nodes, type_connection_colors, selection
             )
@@ -272,7 +331,7 @@ def _plot_line_connectivity(
                 node_linewidth=2.0,
                 facecolor="white",
                 textcolor="black",
-                colormap=connection_colormap,
+                colormap=cmap,
                 colorbar=False,
                 linewidth=1.5,
                 fontsize_names=8,
