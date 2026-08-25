@@ -564,8 +564,8 @@ def _plot_connectivity_lines(
             "button_press_event", partial(_butterfly_on_button_press, params=params)
         )
 
-    # Map cons with least activity in front of the more active ones
-    z_ord = data.std(axis=1).argsort()
+    # Map cons with least activity behind the more active ones
+    z_ord = data.std(axis=1).argsort()[::-1]
 
     # plot connections
     for con_idx, z in enumerate(z_ord):
