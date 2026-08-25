@@ -48,7 +48,7 @@ def plot_connectivity(
 
     Parameters
     ----------
-    con : Connectivity
+    con : ~mne_connectivity.Connectivity
         The connectivity object to plot.
     %(viz_info)s
     %(viz_picks)s

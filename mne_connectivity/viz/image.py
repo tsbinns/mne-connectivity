@@ -53,7 +53,7 @@ def plot_spectrotemporal_connectivity(
 
     Parameters
     ----------
-    con : SpectroTemporalConnectivity
+    con : ~mne_connectivity.SpectroTemporalConnectivity
         The spectro-temporal connectivity object to plot.
     %(viz_info)s
     %(viz_picks)s

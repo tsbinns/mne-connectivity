@@ -46,7 +46,7 @@ def plot_spectral_connectivity(
 
     Parameters
     ----------
-    con : SpectralConnectivity
+    con : ~mne_connectivity.SpectralConnectivity
         The spectral connectivity object to plot.
     %(viz_info)s
     %(viz_picks)s
@@ -118,7 +118,7 @@ def plot_temporal_connectivity(
 
     Parameters
     ----------
-    con : TemporalConnectivity
+    con : ~mne_connectivity.TemporalConnectivity
         The temporal connectivity object to plot.
     %(viz_info)s
     %(viz_picks)s
