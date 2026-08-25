@@ -7,6 +7,7 @@ from matplotlib.colors import Normalize
 from matplotlib.ticker import MaxNLocator
 from mne._fiff.pick import pick_info
 from mne.utils.check import _check_option, _validate_type
+from mne.viz.utils import _plot_masked_image
 
 from .helpers import (
     _add_comps_as_connections,
@@ -20,63 +21,7 @@ from .helpers import (
     _setup_vmin_vmax,
 )
 
-_MATRIX_ANNOTATIONS = WeakKeyDictionary()
 
-
-def _plot_connectivity_matrix_onclick(event, ax, fig, node_names):
-    """Annotate the clicked matrix cell with the corresponding channel names."""
-    if event.inaxes is not ax or event.xdata is None or event.ydata is None:
-        return
-
-    if event.button == 3:  # right-click to remove annotation
-        prev_annot = _MATRIX_ANNOTATIONS.get(ax)
-        if prev_annot is not None:
-            prev_annot[0].remove()
-            prev_annot[1].remove()
-            _MATRIX_ANNOTATIONS[ax] = None
-            fig.canvas.draw_idle()
-        return
-
-    col = int(np.floor(event.xdata + 0.5))
-    row = int(np.floor(event.ydata + 0.5))
-    if row < 0 or row >= len(node_names) or col < 0 or col >= len(node_names):
-        return
-
-    prev_annot = _MATRIX_ANNOTATIONS.get(ax)
-    if prev_annot is not None:
-        prev_annot[0].remove()
-        prev_annot[1].remove()
-        _MATRIX_ANNOTATIONS[ax] = None
-        fig.canvas.draw_idle()
-
-    annotation = ax.text(
-        col + 0.25,
-        row - 0.25,
-        f"{node_names[row]}\n~\n{node_names[col]}",
-        ha="left",
-        va="bottom",
-        color="white",
-        fontsize=8,
-        fontweight="bold",
-        bbox=dict(facecolor="black", alpha=0.6, edgecolor="none", boxstyle="round"),
-    )
-
-    # Highlight the selected cell with a border
-    rect = plt.Rectangle(
-        (col - 0.5, row - 0.5),
-        1,
-        1,
-        linewidth=2,
-        edgecolor="red",
-        facecolor="none",
-    )
-    ax.add_patch(rect)
-
-    _MATRIX_ANNOTATIONS[ax] = (annotation, rect)
-    fig.canvas.draw_idle()
-
-
-# TODO: Add masking support
 def plot_connectivity(
     con,
     picks=None,
@@ -90,6 +35,10 @@ def plot_connectivity(
     cmap=None,
     colorbar=True,
     node_labels="ticks",
+    mask=None,
+    mask_style=None,
+    mask_cmap="Greys",
+    mask_alpha=0.1,
     show=True,
 ):
     """Plot connectivity as a matrix.
@@ -223,9 +172,25 @@ def plot_connectivity(
             1, 1, figsize=(6, 6), facecolor="w", layout="constrained"
         )
 
-        ax.imshow(square_matrix, cmap=cmap, norm=cnorm)
+        img, _ = _plot_masked_image(
+            ax=ax,
+            data=square_matrix,
+            times=np.arange(square_matrix.shape[1]),
+            yvals=np.arange(square_matrix.shape[0]),
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            mask=mask,
+            mask_style=mask_style,
+            mask_alpha=mask_alpha,
+            mask_cmap=mask_cmap,
+            yscale="linear",
+            cnorm=cnorm,
+        )
+        ax.set_box_aspect(1)
         if colorbar:
-            fig.colorbar(ax.images[0], ax=ax, shrink=0.6, label="Connectivity (A.U.)")
+            cbar = fig.colorbar(img, ax=ax, shrink=0.6, label="Connectivity (A.U.)")
+            cbar.ax.set_zorder(ax.get_zorder() - 1)
 
         ax.set_title(f"{con_type} | {con_method}")
         ax.set_xlabel("Targets")
@@ -238,7 +203,7 @@ def plot_connectivity(
         if node_labels is None:
             ax.set_xticks([])
             ax.set_yticks([])
-        else:
+        else:  # node_labels == "ticks"
             ax.xaxis.set_major_locator(MaxNLocator(integer=True))
             ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
@@ -259,3 +224,61 @@ def plot_connectivity(
     if len(figs) == 1:
         return figs[0], axes[0]
     return figs, axes
+
+
+_MATRIX_ANNOTATIONS = WeakKeyDictionary()
+
+
+def _plot_connectivity_matrix_onclick(event, ax, fig, node_names):
+    """Annotate the clicked matrix cell with the corresponding channel names."""
+    if event.inaxes is not ax or event.xdata is None or event.ydata is None:
+        return
+
+    if event.button == 3:  # right-click to remove annotation
+        prev_annot = _MATRIX_ANNOTATIONS.get(ax)
+        if prev_annot is not None:
+            prev_annot[0].remove()
+            prev_annot[1].remove()
+            _MATRIX_ANNOTATIONS[ax] = None
+            fig.canvas.draw_idle()
+        return
+
+    col = int(np.floor(event.xdata + 0.5))
+    row = int(np.floor(event.ydata + 0.5))
+    if row < 0 or row >= len(node_names) or col < 0 or col >= len(node_names):
+        return
+
+    prev_annot = _MATRIX_ANNOTATIONS.get(ax)
+    if prev_annot is not None:
+        prev_annot[0].remove()
+        prev_annot[1].remove()
+        _MATRIX_ANNOTATIONS[ax] = None
+        fig.canvas.draw_idle()
+
+    annotation = ax.text(
+        col + 0.25,
+        row - 0.25,
+        f"{node_names[row]}\n~\n{node_names[col]}",
+        ha="left",
+        va="bottom",
+        color="white",
+        fontsize=8,
+        fontweight="bold",
+        bbox=dict(facecolor="black", alpha=0.6, edgecolor="none", boxstyle="round"),
+    )
+    annotation.set_in_layout(False)
+    annotation.set_zorder(10)
+
+    # Highlight the selected cell with a border
+    rect = plt.Rectangle(
+        (col - 0.5, row - 0.5),
+        1,
+        1,
+        linewidth=2,
+        edgecolor="k",
+        facecolor="none",
+    )
+    ax.add_patch(rect)
+
+    _MATRIX_ANNOTATIONS[ax] = (annotation, rect)
+    fig.canvas.draw_idle()

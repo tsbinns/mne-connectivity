@@ -67,7 +67,9 @@ if MULTIVAR:
         components=np.arange(2),
     )
 
-fig = plot_connectivity(con, info=epochs.info, show=False, picks=None)
+fig = plot_connectivity(
+    con, info=epochs.info, show=False, picks=None, mask=con.get_data("dense") > 0.1
+)
 
 
 plt.show(block=True)
