@@ -38,7 +38,7 @@ con = SpectroTemporalConnectivity(
     method=con.method,
 )
 
-MULTIVAR = True
+MULTIVAR = False
 if MULTIVAR:
     con = SpectroTemporalConnectivity(
         np.concatenate(
@@ -72,7 +72,9 @@ if MULTIVAR:
         method="imcoh",
     )
 
-fig = plot_spectro_temporal_connectivity(con, info=epochs.info, combine="mean")
+fig = plot_spectro_temporal_connectivity(
+    con, info=epochs.info, combine="mean", picks=np.arange(15, 20), selection="targets"
+)
 
 
 plt.show(block=True)

@@ -140,7 +140,7 @@ def _get_con_info(ch_info, node_names, indices, node_indices, is_multivar):
     """Create info object for connectivity data."""
     con_names = []
     for seed, target in zip(*node_indices):
-        con_names.append(f"{node_names[seed]} → {node_names[target]}")
+        con_names.append(f"{node_names[seed]} ~ {node_names[target]}")
 
     ch_types = ch_info.get_channel_types()
     con_types = []
@@ -148,7 +148,7 @@ def _get_con_info(ch_info, node_names, indices, node_indices, is_multivar):
         if not is_multivar:
             seed_type = DEFAULTS["titles"][ch_types[seed]]
             target_type = DEFAULTS["titles"][ch_types[target]]
-            con_types.append(f"{seed_type} → {target_type}")
+            con_types.append(f"{seed_type} ~ {target_type}")
         else:
             if isinstance(seed, np.ma.MaskedArray):
                 seed = seed.compressed()
@@ -160,7 +160,7 @@ def _get_con_info(ch_info, node_names, indices, node_indices, is_multivar):
             target_types = np.unique(
                 [DEFAULTS["titles"][ch_types[ch_idx]] for ch_idx in target]
             )
-            con_types.append(f"{', '.join(seed_types)} → {', '.join(target_types)}")
+            con_types.append(f"{', '.join(seed_types)} ~ {', '.join(target_types)}")
 
     con_info = mne.create_info(ch_names=con_names, sfreq=1.0, ch_types="misc")
     # Can't store connectivity types in ch_types as they are not recognised
@@ -170,16 +170,20 @@ def _get_con_info(ch_info, node_names, indices, node_indices, is_multivar):
     return con_info
 
 
-def _handle_picks(picks, exclude, ch_info, indices, is_multivar):
+def _handle_picks(picks, exclude, ch_info, indices, is_multivar, selection):
     """Handle picks for connectivity data."""
     ch_picks = _picks_to_idx(info=ch_info, picks=picks, none="all", exclude=exclude)
     con_picks = []
     for con_idx, (seed, target) in enumerate(zip(*indices)):
         if not is_multivar:
             seed, target = [seed], [target]
-        if np.any([ch in ch_picks for ch in seed]) or np.any(
-            [ch in ch_picks for ch in target]
-        ):
+        if selection == "both" or picks is None:
+            con_nodes = np.concatenate([seed, target])
+        elif selection == "seeds":
+            con_nodes = seed
+        else:  # selection == "targets"
+            con_nodes = target
+        if np.any([ch in ch_picks for ch in con_nodes]):
             con_picks.append(con_idx)
 
     return con_picks
@@ -263,12 +267,12 @@ def _combine_connections(data, combine, ci, n_comps=1):
                 data_ci[comp_idx, ..., 1] = data_combined[comp_idx] + ci_out
 
     if n_comps == 1:
-        con_names = np.array(["combined nodes"])
+        con_names = np.array([f"combined nodes (n={n_cons})"])
         node_names = con_names.copy()
         node_indices = (np.array([0]), np.array([0]))
     else:
         con_names = np.array(
-            [f"combined nodes ({comp_idx})" for comp_idx in range(n_comps)]
+            [f"combined nodes ({comp_idx}; n={n_cons})" for comp_idx in range(n_comps)]
         )
         node_names = con_names.copy()
         node_indices = (np.arange(n_comps), np.arange(n_comps))

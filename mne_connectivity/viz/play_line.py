@@ -19,7 +19,7 @@ raw.pick("eeg").load_data()
 raw.resample(100)
 
 epochs = make_fixed_length_epochs(raw, duration=5.0)[:10]
-epochs.load_data().pick(np.arange(15))
+epochs.load_data().pick(np.arange(20))
 
 coeffs = epochs.compute_psd(output="complex", fmin=3)
 
@@ -64,7 +64,7 @@ fig = plot_spectral_connectivity(
     con,
     info=epochs.info,
     picks=None,
-    node_selection="seeds_and_targets",
+    selection="both",
     show=False,
     fmin=10,
     fmax=20,

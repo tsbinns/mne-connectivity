@@ -26,6 +26,7 @@ from mne_connectivity.viz.helpers import (
 def plot_spectro_temporal_connectivity(
     con,
     picks=None,
+    selection="both",
     exclude="bads",
     info=None,
     combine="mean",
@@ -54,6 +55,7 @@ def plot_spectro_temporal_connectivity(
     return _plot_image_connectivity(
         con=con,
         picks=picks,
+        selection=selection,
         exclude=exclude,
         info=info,
         combine=combine,
@@ -81,6 +83,7 @@ def plot_spectro_temporal_connectivity(
 def _plot_image_connectivity(
     con,
     picks,
+    selection,
     exclude,
     info,
     combine,
@@ -111,6 +114,8 @@ def _plot_image_connectivity(
     _check_data_is_real(con.get_data())
 
     _check_option("con.shape", len(con.shape), [3, 4], " length")
+
+    _check_option("selection", selection, ["both", "seeds", "targets"])
 
     _validate_type(info, (mne.Info, None), "`info`", "mne.Info or None")
 
@@ -143,7 +148,7 @@ def _plot_image_connectivity(
     con_info = _get_con_info(ch_info, node_names, indices, node_indices, is_multivar)
 
     # Get requested connections
-    picks = _handle_picks(picks, exclude, ch_info, indices, is_multivar)
+    picks = _handle_picks(picks, exclude, ch_info, indices, is_multivar, selection)
     data = data[picks]
     indices = (indices[0][picks], indices[1][picks])
     node_indices = (node_indices[0][picks], node_indices[1][picks])
@@ -231,7 +236,7 @@ def _plot_image_connectivity(
                 con_ax.get_figure().colorbar(
                     mappable=img, ax=type_axes[con_idx], label="Connectivity (A.U.)"
                 )
-            con_ax.set_title(f"{type_con_names[con_idx]} {con_method}")
+            con_ax.set_title(f"{con_type} | {type_con_names[con_idx]} | {con_method}")
 
         figs.extend(type_figs)
         axes.extend(type_axes)

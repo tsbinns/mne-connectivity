@@ -25,6 +25,7 @@ from mne_connectivity.viz.helpers import (
 def plot_spectral_connectivity(
     con,
     picks=None,
+    selection="both",
     exclude="bads",
     info=None,
     combine=None,
@@ -32,7 +33,6 @@ def plot_spectral_connectivity(
     fmin=None,
     fmax=None,
     node_aliases=None,
-    node_selection="seeds_and_targets",
     connection_colors="auto",
     connection_colormap="turbo",
     highlight=None,
@@ -47,13 +47,13 @@ def plot_spectral_connectivity(
     return _plot_line_connectivity(
         con=con,
         picks=picks,
+        selection=selection,
         exclude=exclude,
         info=info,
         combine=combine,
         ci=ci,
         xlim=(fmin, fmax),
         node_aliases=node_aliases,
-        node_selection=node_selection,
         connection_colors=connection_colors,
         connection_colormap=connection_colormap,
         highlight=highlight,
@@ -67,6 +67,7 @@ def plot_spectral_connectivity(
 def plot_temporal_connectivity(
     con,
     picks=None,
+    selection="both",
     exclude="bads",
     info=None,
     combine=None,
@@ -74,7 +75,6 @@ def plot_temporal_connectivity(
     tmin=None,
     tmax=None,
     node_aliases=None,
-    node_selection="seeds_and_targets",
     connection_colors="auto",
     connection_colormap="turbo",
     highlight=None,
@@ -89,13 +89,13 @@ def plot_temporal_connectivity(
     return _plot_line_connectivity(
         con=con,
         picks=picks,
+        selection=selection,
         exclude=exclude,
         info=info,
         combine=combine,
         ci=ci,
         xlim=(tmin, tmax),
         node_aliases=node_aliases,
-        node_selection=node_selection,
         connection_colors=connection_colors,
         connection_colormap=connection_colormap,
         highlight=highlight,
@@ -109,13 +109,13 @@ def plot_temporal_connectivity(
 def _plot_line_connectivity(
     con,
     picks,
+    selection,
     exclude,
     info,
     combine,
     ci,
     xlim,
     node_aliases,
-    node_selection,
     connection_colors,
     connection_colormap,
     highlight,
@@ -132,6 +132,8 @@ def _plot_line_connectivity(
 
     _check_option("con.shape", len(con.shape), [2, 3], " length")
 
+    _check_option("selection", selection, ["both", "seeds", "targets"])
+
     _validate_type(info, (mne.Info, None), "`info`", "mne.Info or None")
 
     _validate_type(combine, (str, Callable, None), "`combine`")
@@ -146,9 +148,6 @@ def _plot_line_connectivity(
             raise ValueError("If `ci` is a float, it must be > 0 and <= 100.")
 
     _validate_type(node_aliases, (dict, None), "`node_aliases`", "dict or None")
-    _check_option(
-        "node_selection", node_selection, ["seeds_and_targets", "seeds", "targets"]
-    )
 
     _check_option(
         "connection_colors", connection_colors, ["auto", "global", "relative"]
@@ -175,7 +174,7 @@ def _plot_line_connectivity(
     con_info = _get_con_info(ch_info, node_names, indices, node_indices, is_multivar)
 
     # Get requested connections
-    picks = _handle_picks(picks, exclude, ch_info, indices, is_multivar)
+    picks = _handle_picks(picks, exclude, ch_info, indices, is_multivar, selection)
     data = data[picks]
     indices = (indices[0][picks], indices[1][picks])
     node_indices = (node_indices[0][picks], node_indices[1][picks])
@@ -236,16 +235,14 @@ def _plot_line_connectivity(
                 type_node_names, type_node_indices
             )
             n_circle_nodes = len(circle_names)
-            node_is_selectable = _get_node_selectability(circle_indices, node_selection)
+            node_is_selectable = _get_node_selectability(circle_indices, selection)
             # If:
             # - plot is interactive
             # - connectivity data is (lower/upper-triangular) all-to-all
             # - nodes as both seeds and targets in connections can be selected
             # then colouring works best if connections are duplicated such that all
             # nodes are seeds and targets
-            duplicate_cons = (
-                is_all_to_all and interactive and node_selection == "seeds_and_targets"
-            )
+            duplicate_cons = is_all_to_all and interactive and selection == "both"
             if duplicate_cons:
                 circle_indices = (
                     np.concatenate([circle_indices[0], circle_indices[1]]),
@@ -258,7 +255,7 @@ def _plot_line_connectivity(
             else:
                 type_connection_colors = connection_colors
             circle_con, circle_con_order = _get_circle_con(
-                circle_indices, n_circle_nodes, type_connection_colors, node_selection
+                circle_indices, n_circle_nodes, type_connection_colors, selection
             )
 
             circle_ax = fig.add_subplot(1, 3, 3, polar=True)
@@ -283,7 +280,8 @@ def _plot_line_connectivity(
                 ax=circle_ax,
                 interactive=False,  # use our modified callback
                 title=(
-                    f"Node selection\n({node_selection.replace('_', ' ')})"
+                    "Node selection\n"
+                    f"({selection.replace('both', 'seeds and targets')})"
                     if interactive
                     else "Nodes"
                 ),
@@ -306,7 +304,7 @@ def _plot_line_connectivity(
             ax=line_ax,
             xvar=xvar,
             xlabel=xlabel,
-            title=f"{con_type} {con_method}",
+            title=f"{con_type} | {con_method}",
             interactive=interactive,
             line_alpha=0.75,
             ci_alpha=0.3,
@@ -325,7 +323,7 @@ def _plot_line_connectivity(
                 node_angles=np.linspace(0, 2 * np.pi, n_circle_nodes, endpoint=False),
                 duplicate_cons=duplicate_cons,
                 circle_con_order=circle_con_order,
-                node_selection=node_selection,
+                selection=selection,
                 node_selectability=node_is_selectable,
                 has_ci=type_ci is not None,
             )
@@ -376,22 +374,22 @@ def _get_circle_names_and_indices(node_names, node_indices):
     return circle_names, circle_indices, is_all_to_all
 
 
-def _get_node_selectability(circle_indices, node_selection):
+def _get_node_selectability(circle_indices, selection):
     """Get selectability of nodes in circle plot based on node selection type."""
     n_unique_nodes = len(np.unique(np.r_[circle_indices[0], circle_indices[1]]))
-    if node_selection == "seeds_and_targets":
+    if selection == "both":
         node_selectability = [True] * n_unique_nodes
     else:
-        if node_selection == "seeds":
+        if selection == "seeds":
             relevant_indices = circle_indices[0]
-        else:  # node_selection == "targets"
+        else:  # selection == "targets"
             relevant_indices = circle_indices[1]
         node_selectability = [idx in relevant_indices for idx in range(n_unique_nodes)]
 
     return node_selectability
 
 
-def _get_circle_con(circle_indices, n_nodes, connection_colors, node_selection):
+def _get_circle_con(circle_indices, n_nodes, connection_colors, selection):
     """Get connectivity values for circle plot (determines colour)."""
     if connection_colors == "relative":  # values span colourbar per node
         node_angles = np.linspace(0, 2 * np.pi, n_nodes, endpoint=False)
@@ -402,9 +400,9 @@ def _get_circle_con(circle_indices, n_nodes, connection_colors, node_selection):
                 node_diff -= 2 * np.pi
             circle_con[con_idx] = np.abs(node_diff)
         # Normalise values for different number of connections per node
-        if node_selection != "seeds_and_targets":
+        if selection != "both":
             consider_indices = (
-                circle_indices[0] if node_selection == "seeds" else circle_indices[1]
+                circle_indices[0] if selection == "seeds" else circle_indices[1]
             )
             for node_idx in range(n_nodes):
                 node_mask = consider_indices == node_idx
@@ -449,7 +447,7 @@ def _plot_connectivity_circle_onpick(
     node_angles,
     duplicate_cons,
     circle_con_order,
-    node_selection,
+    selection,
     node_selectability,
     has_ci,
     ylim=(9, 10),
@@ -482,11 +480,11 @@ def _plot_connectivity_circle_onpick(
 
         for circle_idx, line_idx in enumerate(circle_con_order):
             seed, target = indices[0][line_idx], indices[1][line_idx]
-            if node_selection == "seeds_and_targets":
+            if selection == "both":
                 viable_nodes = [seed, target] if not duplicate_cons else [seed]
-            elif node_selection == "seeds":
+            elif selection == "seeds":
                 viable_nodes = [seed]
-            else:  # node_selection == "targets"
+            else:  # selection == "targets"
                 viable_nodes = [target]
             visible = node in viable_nodes
             patches[circle_idx].set_visible(visible)

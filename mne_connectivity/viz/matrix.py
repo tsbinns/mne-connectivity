@@ -52,7 +52,7 @@ def _plot_connectivity_matrix_onclick(event, ax, fig, node_names):
     annotation = ax.text(
         col + 0.25,
         row - 0.25,
-        f"{node_names[row]}\n→\n{node_names[col]}",
+        f"{node_names[row]}\n~\n{node_names[col]}",
         ha="left",
         va="bottom",
         color="white",
@@ -80,6 +80,7 @@ def _plot_connectivity_matrix_onclick(event, ax, fig, node_names):
 def plot_connectivity(
     con,
     picks=None,
+    selection="both",
     exclude="bads",
     info=None,
     node_aliases=None,
@@ -159,6 +160,8 @@ def plot_connectivity(
 
     _check_option("con.shape", len(con.shape), [1, 2], " length")
 
+    _check_option("selection", selection, ["both", "seeds", "targets"])
+
     _validate_type(info, (mne.Info, None), "`info`", "mne.Info or None")
 
     _check_option("node_labels", node_labels, ["names", "ticks", None])
@@ -175,7 +178,7 @@ def plot_connectivity(
     con_info = _get_con_info(ch_info, node_names, indices, node_indices, is_multivar)
 
     # Get requested connections
-    picks = _handle_picks(picks, exclude, ch_info, indices, is_multivar)
+    picks = _handle_picks(picks, exclude, ch_info, indices, is_multivar, selection)
     data = data[picks]
     indices = (indices[0][picks], indices[1][picks])
     node_indices = (node_indices[0][picks], node_indices[1][picks])
@@ -224,7 +227,7 @@ def plot_connectivity(
         if colorbar:
             fig.colorbar(ax.images[0], ax=ax, shrink=0.6, label="Connectivity (A.U.)")
 
-        ax.set_title(f"{con_type} {con_method}")
+        ax.set_title(f"{con_type} | {con_method}")
         ax.set_xlabel("Targets")
         ax.set_ylabel("Seeds")
         if node_labels == "names":
