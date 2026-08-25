@@ -294,7 +294,7 @@ def _plot_line_connectivity(
             duplicate_cons = False
 
         # Plot connectivity as lines
-        fig, line_ax = _plot_connectivity_lines(
+        fig, line_ax, line_alphas, ci_alphas = _plot_connectivity_lines(
             data=type_data,
             ci=type_ci,
             con_colors=con_colors,
@@ -326,6 +326,8 @@ def _plot_line_connectivity(
                 selection=selection,
                 node_selectability=node_is_selectable,
                 has_ci=type_ci is not None,
+                line_alphas=line_alphas,
+                ci_alphas=ci_alphas,
             )
             fig.canvas.mpl_connect("button_press_event", callback)
 
@@ -450,6 +452,8 @@ def _plot_connectivity_circle_onpick(
     selection,
     node_selectability,
     has_ci,
+    line_alphas,
+    ci_alphas,
     ylim=(9, 10),
 ):
     """Isolate connections for a single node and reflect this in the line plot.
@@ -478,6 +482,7 @@ def _plot_connectivity_circle_onpick(
         for text in line_ax.texts:
             text.set_alpha(0)  # hide any connection labels
 
+        visible_idcs = []
         for circle_idx, line_idx in enumerate(circle_con_order):
             seed, target = indices[0][line_idx], indices[1][line_idx]
             if selection == "both":
@@ -487,23 +492,46 @@ def _plot_connectivity_circle_onpick(
             else:  # selection == "targets"
                 viable_nodes = [target]
             visible = node in viable_nodes
+            if visible:
+                visible_idcs.append((circle_idx, line_idx))
             patches[circle_idx].set_visible(visible)
             lines[line_idx].set_visible(visible)
             lines[line_idx].set_picker(0 if not visible else True)
             if has_ci:
                 collections[line_idx].set_visible(visible)
+
+        # Scale alpha based on connection strength
+        max_line_alpha = np.max(line_alphas)
+        if has_ci:
+            max_ci_alpha = np.max(ci_alphas)
+        z_ord = [lines[line_idx].get_zorder() for _, line_idx in visible_idcs]
+        z_ranks = np.argsort(np.argsort(z_ord))
+        n_visible_cons = len(visible_idcs)
+        for (circle_idx, line_idx), z in zip(visible_idcs, z_ranks, strict=True):
+            alpha_scale = _get_alpha_scale(z, n_visible_cons)
+            new_alpha = max_line_alpha * alpha_scale
+            lines[line_idx].set_alpha(new_alpha)
+            patches[circle_idx].set_alpha(new_alpha)
+            if has_ci:
+                new_ci_alpha = max_ci_alpha * alpha_scale
+                collections[line_idx].set_alpha(new_ci_alpha)
+
         fig.canvas.draw()
 
     elif event.button == 3:  # right click
         n_cons = len(indices[0]) if not duplicate_cons else len(indices[0]) // 2
         for circle_idx, line_idx in enumerate(circle_con_order):
-            # Make original connections visible and hide duplicated connections
+            # Make original connections visible with original alphas and hide duplicated
+            # connections
             visible = line_idx < n_cons
             patches[circle_idx].set_visible(visible)
+            patches[circle_idx].set_alpha(line_alphas[line_idx])
             lines[line_idx].set_visible(visible)
             lines[line_idx].set_picker(0 if not visible else True)
+            lines[line_idx].set_alpha(line_alphas[line_idx])
             if has_ci:
                 collections[line_idx].set_visible(visible)
+                collections[line_idx].set_alpha(ci_alphas[line_idx])
         for text in line_ax.texts:
             text.set_alpha(0)  # hide any connection labels
         fig.canvas.draw()
@@ -569,6 +597,7 @@ def _plot_connectivity_lines(
 
     # plot connections
     for con_idx, z in enumerate(z_ord):
+        alpha_scale = _get_alpha_scale(z, n_cons)
         if ci is not None:
             ax.fill_between(
                 xvar,
@@ -577,7 +606,7 @@ def _plot_connectivity_lines(
                 zorder=z + 1,
                 color=con_colors[con_idx],
                 edgecolor=None,
-                alpha=ci_alpha,
+                alpha=ci_alpha * alpha_scale,
             )
         lines.append(
             ax.plot(
@@ -586,20 +615,21 @@ def _plot_connectivity_lines(
                 picker=interactive,
                 zorder=z + 1,
                 color=con_colors[con_idx],
-                alpha=line_alpha,
+                alpha=line_alpha * alpha_scale,
                 linewidth=linewidth,
             )[0]
         )
         lines[-1].set_pickradius(3.0)
     if duplicate_cons:
         for con_idx, z in enumerate(z_ord):
+            alpha_scale = _get_alpha_scale(z, n_cons)
             if ci is not None:
                 ax.fill_between(
                     xvar,
                     ci[con_idx],
                     zorder=z + 1,
                     color=con_colors[con_idx],
-                    alpha=ci_alpha,
+                    alpha=ci_alpha * alpha_scale,
                 )
             lines.append(
                 ax.plot(
@@ -608,11 +638,16 @@ def _plot_connectivity_lines(
                     picker=interactive,
                     zorder=z + 1,
                     color=con_colors[con_idx + n_cons],
-                    alpha=line_alpha,
+                    alpha=line_alpha * alpha_scale,
                     linewidth=linewidth,
                 )[0]
             )
             lines[-1].set_pickradius(3.0)
+
+    line_alphas = np.array([line.get_alpha() for line in lines])
+    ci_alphas = None
+    if ci is not None:
+        ci_alphas = np.array([collection.get_alpha() for collection in ax.collections])
 
     ax.set_xlim(xvar[0], xvar[-1])
 
@@ -649,4 +684,11 @@ def _plot_connectivity_lines(
         # Put back the y limits as fill_betweenx messes them up
         ax.set_ylim(this_ylim)
 
-    return fig, ax
+    return fig, ax, line_alphas, ci_alphas
+
+
+def _get_alpha_scale(con_rank, n_cons):
+    """Get exponential alpha scale for a connection based on its rank."""
+    if n_cons == 1:
+        return 1.0
+    return n_cons ** (-con_rank / (n_cons - 1))
