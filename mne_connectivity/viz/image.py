@@ -8,6 +8,7 @@ from mne.utils.check import _check_option, _validate_type
 from mne.utils.numerics import _time_mask
 from mne.viz.utils import _plot_masked_image
 
+from ..utils import fill_doc
 from .helpers import (
     _add_comps_as_connections,
     _check_data_is_real,
@@ -22,12 +23,14 @@ from .helpers import (
 )
 
 
+@fill_doc
 def plot_spectrotemporal_connectivity(
     con,
+    *,
+    info=None,
     picks=None,
     selection="both",
     exclude="bads",
-    info=None,
     combine="mean",
     node_aliases=None,
     tmin=None,
@@ -46,7 +49,39 @@ def plot_spectrotemporal_connectivity(
     mask_alpha=0.1,
     show=True,
 ):
-    """Plot spectro-temporal connectivity."""
+    """Plot spectro-temporal connectivity.
+
+    Parameters
+    ----------
+    con : SpectroTemporalConnectivity
+        The spectro-temporal connectivity object to plot.
+    %(viz_info)s
+    %(viz_picks)s
+    %(viz_selection)s
+    %(viz_exclude)s
+    %(viz_combine_image_spectrotemporal)s
+    %(viz_node_aliases)s
+    %(viz_tmin_tmax)s
+    %(viz_fmin_fmax)s
+    %(viz_yscale_image)s
+    %(viz_vmin_vmax)s
+    %(viz_cnorm)s
+    %(viz_cmap)s
+    %(viz_cbar)s
+    %(viz_mask)s
+    %(viz_mask_style)s
+    %(viz_mask_cmap)s
+    %(viz_mask_alpha)s
+    %(viz_show)s
+
+    Returns
+    -------
+    %(viz_figures)s
+
+    Notes
+    -----
+    %(viz_components_note)s
+    """
     from mne_connectivity import SpectroTemporalConnectivity
 
     _validate_type(

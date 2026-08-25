@@ -187,7 +187,7 @@ picks : str | array_like | slice | None
     be included if their names or indices are explicitly provided.
 """
 
-docdict["viz_selection"] = """
+viz_selection_template = """
 selection : ``'seeds'`` | ``'targets'`` | ``'both'``
     What the ``picks`` parameter will be applied to. If ``'seeds'``, only connections
     within the seed channels matchinng ``picks`` will be included. If ``'targets'``,
@@ -195,7 +195,7 @@ selection : ``'seeds'`` | ``'targets'`` | ``'both'``
     ``'both'``, connections will be included if either the seed or target channels match
     ``picks``. Ignored if ``picks`` is ``None``.{}
 """
-
+docdict["viz_selection"] = viz_selection_template.format("")
 docdict["viz_selection_line"] = docdict["viz_selection"].format(
     " This also controls the channels which can be selected in the interactive circle "
     "plot."
@@ -271,6 +271,14 @@ cmap : str | matplotlib.colors.Colormap
     Matplotlib colormap name. Default is ``'turbo'``.
 """
 
+docdict["viz_yscale_image"] = """
+yscale : ``'linear'`` | ``'log'`` | ``'auto'``
+    The scale of the y-axis (frequencies). ``'linear'`` gives a linear y-axis. ``'log'``
+    gives a log-spaced y-axis. ``'auto'`` (default) detects if frequencies are
+    log-spaced, and if so, sets the y-axis to ``'log'``, otherwise is ``'linear'``.
+    Default is ``'auto'``.
+"""
+
 docdict["viz_node_aliases"] = """
 node_aliases : dict | None
     Mapping of node indices to node names. Keys should be seed or target indices
@@ -282,7 +290,7 @@ node_aliases : dict | None
     indices, as determined by ``np.unique([*con.indices[0], *con.indices[1]])``.
 """
 
-docdict["viz_node_vmin_vmax"] = """
+docdict["viz_vmin_vmax"] = """
 vmin, vmax : float | None
     Lower and upper bounds of the colormap, respectively. If both entries are ``None``
     and there are both positive and negative values in the data, the bounds are set at ±

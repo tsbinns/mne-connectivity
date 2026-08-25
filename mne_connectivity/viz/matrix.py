@@ -55,7 +55,7 @@ def plot_connectivity(
     %(viz_selection)s
     %(viz_exclude)s
     %(viz_node_aliases)s
-    %(viz_node_vmin_vmax)s
+    %(viz_vmin_vmax)s
     %(viz_cnorm)s
     %(viz_cmap)s
     %(viz_cbar)s
