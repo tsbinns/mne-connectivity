@@ -20,6 +20,7 @@ from mne.utils import (
 
 from mne_connectivity.utils import (
     _check_if_multivariate_indices,
+    _get_full_connectivity,
     _get_unique_multivariate_nodes_and_indices,
     _prepare_xarray_mne_data_structures,
     fill_doc,
@@ -818,6 +819,12 @@ class BaseConnectivity(EpochMixin):
         ``[[0, 1], [2, 3], [4, 5]]``.
         """
         _check_option("output", output, ["raveled", "dense", "compact"])
+        _validate_type(missing, (str, "numeric"), "missing")
+        if isinstance(missing, str):
+            _check_option("missing", missing, ["raise"])
+        else:
+            missing = float(missing)
+
         multivariate_nodes = None
 
         if output == "compact":
@@ -842,48 +849,19 @@ class BaseConnectivity(EpochMixin):
             else:
                 indices, n_nodes = self.indices, self.n_nodes
 
-            # get the new shape of the data array
+            # Move epochs from first dimension temporarily for easier reshaping
+            data = self._data
             if self.is_epoched:
-                new_shape = [self.n_epochs]
-            else:
-                new_shape = []
+                data = np.moveaxis(data, 0, -1)
 
-            # handle the case where model order is defined in VAR connectivity
-            # and thus appends the connectivity matrices side by side, so the
-            # shape is N x N * lags
-            new_shape.extend([n_nodes, n_nodes])
-            if "components" in self.dims:
-                new_shape.append(len(self.coords["components"]))
-            if "freqs" in self.dims:
-                new_shape.append(len(self.coords["freqs"]))
-            if "times" in self.dims:
-                new_shape.append(len(self.coords["times"]))
+            # Get connectivity as a square matrix, with missing values filled
+            data = _get_full_connectivity(
+                data, indices, n_nodes, self.method, missing=missing
+            )
 
-            if isinstance(indices, tuple) or indices == "symmetric":
-                if np.iscomplexobj(self._data):
-                    fill_value = np.nan + 1j * np.nan
-                else:
-                    fill_value = np.nan
-                data = np.full(new_shape, fill_value=fill_value, dtype=self._data.dtype)
-
-            if isinstance(indices, tuple):
-                # handle things differently if indices is defined
-                row_idx, col_idx = indices
-                if self.is_epoched:
-                    data[:, row_idx, col_idx, ...] = self._data
-                else:
-                    data[row_idx, col_idx, ...] = self._data
-            elif indices == "symmetric":
-                # get the upper/lower triangular indices
-                row_triu_inds, col_triu_inds = np.triu_indices(n_nodes, k=0)
-                if self.is_epoched:
-                    data[:, row_triu_inds, col_triu_inds, ...] = self._data
-                    data[:, col_triu_inds, row_triu_inds, ...] = self._data
-                else:
-                    data[row_triu_inds, col_triu_inds, ...] = self._data
-                    data[col_triu_inds, row_triu_inds, ...] = self._data
-            else:
-                data = self._data.reshape(new_shape)
+            # Move epochs back to first dimension if needed
+            if self.is_epoched:
+                data = np.moveaxis(data, -1, 0)
 
         if multivariate_nodes is not None:
             return data, multivariate_nodes
