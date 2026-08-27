@@ -1,13 +1,16 @@
 from os import path as op
 
 import numpy as np
-from image import plot_spectro_temporal_connectivity
 from matplotlib import pyplot as plt
 from mne import make_fixed_length_epochs
 from mne.datasets import sample
 from mne.io import read_raw_fif
 
-from mne_connectivity import SpectroTemporalConnectivity, spectral_connectivity_epochs
+from mne_connectivity import (
+    SpectroTemporalConnectivity,
+    plot_spectrotemporal_connectivity,
+    spectral_connectivity_epochs,
+)
 
 data_path = sample.data_path()
 raw_fname = op.join(data_path, "MEG", "sample", "sample_audvis_filt-0-40_raw.fif")
@@ -72,8 +75,8 @@ if MULTIVAR:
         method="imcoh",
     )
 
-fig = plot_spectro_temporal_connectivity(
-    con, info=epochs.info, combine="mean", picks=np.arange(15, 20), selection="targets"
+fig = plot_spectrotemporal_connectivity(
+    con, info=epochs.info, combine="mean", picks=None, selection="both"
 )
 
 
