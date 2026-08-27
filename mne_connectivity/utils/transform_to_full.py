@@ -1,58 +1,8 @@
 import numpy as np
 
-KNOWN_METHODS = [
-    # spec_conn_epochs/time
-    "coh",
-    "cohy",
-    "imcoh",
-    "cacoh",
-    "mic",
-    "mim",
-    "plv",
-    "ciplv",
-    "ppc",
-    "pli2_unbiased",
-    "dpli",
-    "wpli",
-    "wpli2_debiased",
-    "gc",
-    "gc_tr",
-    # Mutual info
-    "SMI",
-    "wSMI",
-    # VAR models
-    "VAR(1)",
-    "VAR(p)",
-    "Time-varying VAR(1)",
-    "Time-varying VAR(p)",
-    # Other
-    "envelope correlation",
-    "phase-slope-index",
-]
-
-CAN_SYMMETRISE = {
-    "coh": _symmetrise_coh,
-    "cohy": _symmetrise_cohy,
-    "imcoh": _symmetrise_imcoh,
-    "cacoh": _symmetrise_coh,
-    "mic": _symmetrise_cohy,
-    "mim": _symmetrise_coh,
-    "SMI": _symmetrise_smi,
-    "wSMI": _symmetrise_smi,
-    "envelope correlation": _symmetrise_envelope_correlation,
-    "phase-slope-index": _symmetrise_phase_slope_index,
-    "plv": _symmetrise_plv,
-    "ciplv": _symmetrise_ciplv,
-    "ppc": _symmetrise_ppc,
-    "pli2_unbiased": _symmetrise_pli2_unbiased,
-    "dpli": _symmetrise_dpli,
-    "wpli": _symmetrise_wpli,
-    "wpli2_debiased": _symmetrise_wpli2_debiased,
-}
-
 
 def _symmetrise_connectivity(data, indices, n_nodes, method):
-    """"""
+    """Lorem ipsum."""
     # Check if data is already full (no need to symmetrise)
     if indices == "all":
         return data.reshape((n_nodes, n_nodes, *data.shape[1:]))
@@ -94,51 +44,76 @@ def _make_square(data, indices, n_nodes):
     return square_matrix
 
 
+def _make_symmetric(data, indices, diag, transpose_extra=None):
+    """Make the connectivity data symmetric."""
+    # Set the diagonal
+    data[np.diag_indices(data.shape[0])] = diag
+    # Always transpose
+    data = data + data.transpose(1, 0, *range(2, data.ndim))
+    # Perform something on top of the transpose if needed
+    if transpose_extra is not None:
+        if indices == "lower":
+            triu = np.triu_indices(data.shape[0], k=1)
+            data[triu] = transpose_extra(data[triu])
+        else:  # "upper"
+            tril = np.tril_indices(data.shape[0], k=-1)
+            data[tril] = transpose_extra(data[tril])
+    return data
+
+
 def _symmetrise_coh(data, indices):
     """Symmetrise coherence data."""
-    data = data + data.transpose(1, 0, *range(2, data.ndim))
-    data[np.diag_indices(data.shape[0])] = 1.0
-    return data
+    return _make_symmetric(data, indices, diag=1.0)
 
 
 def _symmetrise_cohy(data, indices):
     """Symmetrise coherency data."""
-    data = data + data.transpose(1, 0, *range(2, data.ndim))
-    data[np.diag_indices(data.shape[0])] = 1.0 + 1.0j
-    tril = np.tril_indices(data.shape[0], k=-1)
-    triu = np.triu_indices(data.shape[0], k=1)
-    if indices == "lower":
-        data[triu] = np.conj(data[tril])
-    else:  # "upper"
-        data[tril] = np.conj(data[triu])
-    return data
+    return _make_symmetric(data, indices, diag=1.0 + 0.0j, transpose_extra=np.conj)
 
 
 def _symmetrise_imcoh(data, indices):
     """Symmetrise imaginary part of coherency data."""
-    data = data + data.transpose(1, 0, *range(2, data.ndim))
-    data[np.diag_indices(data.shape[0])] = 0.0
-    tril = np.tril_indices(data.shape[0], k=-1)
-    triu = np.triu_indices(data.shape[0], k=1)
-    if indices == "lower":
-        data[triu] *= -1.0
-    else:  # "upper"
-        data[tril] *= -1.0
-    return data
+    return _make_symmetric(data, indices, diag=0.0, transpose_extra=lambda x: -x)
+
+
+def _symmetrise_plv(data, indices):
+    """Symmetrise phase-locking value data."""
+    return _make_symmetric(data, indices, diag=1.0)
+
+
+def _symmetrise_ciplv(data, indices):
+    """Symmetrise corrected imaginary part of phase-locking value data."""
+    return _make_symmetric(data, indices, diag=0.0)
+
+
+def _symmetrise_ppc(data, indices):
+    """Symmetrise pairwise phase consistency data."""
+    return _make_symmetric(data, indices, diag=1.0)
+
+
+def _symmetrise_pli(data, indices):
+    """Symmetrise phase lag index data."""
+    return _make_symmetric(data, indices, diag=0.0)
+
+
+def _symmetrise_dpli(data, indices):
+    """Symmetrise directed phase lag index data."""
+    return _make_symmetric(data, indices, diag=0.5, transpose_extra=lambda x: 1.0 - x)
+
+
+def _symmetrise_wpli(data, indices):
+    """Symmetrise weighted phase lag index data."""
+    return _make_symmetric(data, indices, diag=0.0)
 
 
 def _symmetrise_smi(data, indices):
     """Symmetrise symbolic mutual information data."""
-    data = data + data.transpose(1, 0, *range(2, data.ndim))
-    data[np.diag_indices(data.shape[0])] = 0.0
-    return data
+    return _make_symmetric(data, indices, diag=0.0)
 
 
 def _symmetrise_envelope_correlation(data, indices):
     """Symmetrise envelope correlation data."""
-    data = data + data.transpose(1, 0, *range(2, data.ndim))
-    data[np.diag_indices(data.shape[0])] = 1.0
-    return data
+    return _make_symmetric(data, indices, diag=1.0)
 
 
 CAN_SYMMETRISE = {
@@ -148,10 +123,11 @@ CAN_SYMMETRISE = {
     "plv": _symmetrise_plv,
     "ciplv": _symmetrise_ciplv,
     "ppc": _symmetrise_ppc,
-    "pli2_unbiased": _symmetrise_pli2_unbiased,
+    "pli": _symmetrise_pli,
+    "pli2_unbiased": _symmetrise_pli,
     "dpli": _symmetrise_dpli,
     "wpli": _symmetrise_wpli,
-    "wpli2_debiased": _symmetrise_wpli2_debiased,
+    "wpli2_debiased": _symmetrise_wpli,
     "SMI": _symmetrise_smi,
     "wSMI": _symmetrise_smi,
     "envelope correlation": _symmetrise_envelope_correlation,
