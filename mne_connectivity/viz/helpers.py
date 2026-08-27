@@ -5,6 +5,11 @@ from mne.defaults import DEFAULTS
 from mne.stats.permutations import bootstrap_confidence_interval
 from mne.utils.check import _check_if_nan
 
+from ..utils import (
+    _check_if_multivariate_indices,
+    _get_unique_multivariate_nodes_and_indices,
+)
+
 
 def _check_data_is_real(data):
     """Check that data is real-valued."""
@@ -22,26 +27,19 @@ def _handle_data_and_indices(con, ch_info):
 
     data = con.get_data("raveled")
     if isinstance(indices, tuple):  # Explicit indices provided
-        if not np.all(
-            [np.issubdtype(type(ind), int) for ind in indices[0]]
-        ) and not np.all([np.issubdtype(type(ind), int) for ind in indices[1]]):
-            is_multivar = True
+        is_multivar = _check_if_multivariate_indices(indices)
         if not is_multivar:
             indices = (np.array(indices[0]), np.array(indices[1]))
 
     elif indices is None or indices == "all":  # All-to-all connectivity
         # Construct explicit indices
-        n_cons = con.shape[0]
-        n_chans = con.n_nodes
-        if n_cons == 1 and n_chans > 2:  # multivariate connectivity
-            indices = (np.arange(n_chans)[None, :], np.arange(n_chans)[None, :])
-            is_multivar = True
-        else:  # bivariate connectivity
-            indices = np.tril_indices(n_chans, -1)
-            square_shape = (n_chans, n_chans)
-            if data.ndim > 1:
-                square_shape += data.shape[1:]
-            data = data.reshape(*square_shape)[indices]
+        # NOTE Cannot distinguish between bivariate and multivariate connectivity when
+        # indices is None or "all". Assume bivariate connectivity for now.
+        indices = np.tril_indices(con.n_nodes, -1)
+        square_shape = (con.n_nodes, con.n_nodes)
+        if data.ndim > 1:
+            square_shape += data.shape[1:]
+        data = data.reshape(*square_shape)[indices]
 
         # Drop entries for bad channels from all-to-all data/indices
         bad_idcs = []
@@ -97,41 +95,18 @@ def _get_node_names_and_indices(ch_names, node_aliases, indices, is_multivar):
     # Get names of nodes (via aliases, directly, or create for multivar connections)
     if not is_multivar:
         unique_nodes = np.unique([*indices[0], *indices[1]]).tolist()
+        node_indices = (indices[0].copy(), indices[1].copy())  # use original indices
         node_names = ch_names
         for node_ind in unique_nodes:
             if node_ind in node_aliases.keys():
                 node_names[node_ind] = node_aliases[node_ind]
     else:
-        unique_nodes = set()
-        for node_ind in (*indices[0], *indices[1]):
-            if isinstance(node_ind, np.ma.MaskedArray):
-                node_ind = node_ind.compressed()
-            unique_nodes.add(tuple(node_ind))
-        unique_nodes = list(unique_nodes)
+        unique_nodes, node_indices = _get_unique_multivariate_nodes_and_indices(indices)
         node_names = [f"node {node_idx}" for node_idx in range(len(unique_nodes))]
         for node_idx, node_ind in enumerate(unique_nodes):
+            node_ind = tuple(node_ind)
             if node_ind in node_aliases.keys():
                 node_names[node_idx] = node_aliases[node_ind]
-
-    # Get indices in terms of node_names entries
-    if not is_multivar:  # just use original indices
-        node_indices = (indices[0].copy(), indices[1].copy())
-    else:  # get indices in terms of unique nodes
-        node_indices = ([], [])
-        for seed, target in zip(*indices):
-            if isinstance(seed, np.ma.MaskedArray):
-                seed = seed.compressed()
-            if isinstance(target, np.ma.MaskedArray):
-                target = target.compressed()
-            for node_idx, node in enumerate(unique_nodes):
-                if np.array_equal(node, seed):
-                    node_indices[0].append(node_idx)
-                    break
-            for node_idx, node in enumerate(unique_nodes):
-                if np.array_equal(node, target):
-                    node_indices[1].append(node_idx)
-                    break
-        node_indices = (np.array(node_indices[0]), np.array(node_indices[1]))
 
     return node_names, node_indices
 
