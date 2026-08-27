@@ -455,11 +455,9 @@ class BaseConnectivity(EpochMixin):
         metadata=None,
         **kwargs,
     ):
-        if isinstance(indices, str) and indices not in ["all", "symmetric"]:
-            raise ValueError(
-                'Indices can only be "all", "symmetric", or a list of tuples. '
-                f"It cannot be {indices}."
-            )
+        _validate_type(indices, (str, tuple), "indices")
+        if isinstance(indices, str):
+            _check_option("indices", indices, ["all", "lower", "upper"])
 
         # prepare metadata pandas dataframe and ensure metadata is a Pandas
         # DataFrame object
@@ -594,10 +592,6 @@ class BaseConnectivity(EpochMixin):
 
         # get the number of estimated nodes
         self._get_num_connections(data)
-        if self.is_epoched:
-            data_len = data.shape[1]
-        else:
-            data_len = data.shape[0]
 
         if isinstance(indices, tuple):
             # check that the indices passed in are of the same length
@@ -607,20 +601,31 @@ class BaseConnectivity(EpochMixin):
                     f"are right now {len(indices[0])} and {len(indices[1])}."
                 )
             # indices length should match the data length
-            if len(indices[0]) != data_len:
+            if len(indices[0]) != self.n_estimated_nodes:
                 raise ValueError(
                     f"The number of indices, {len(indices[0])} should match the "
-                    f"raveled data length passed in of {data_len}."
+                    f"raveled data length passed in of {self.n_estimated_nodes}."
                 )
 
-        elif indices == "symmetric":
-            expected_len = ((n_nodes + 1) * n_nodes) // 2
-            if data_len != expected_len:
+        elif indices in ["lower", "upper"]:
+            expected_len = n_nodes * (n_nodes - 1) // 2
+            if self.n_estimated_nodes != expected_len:
                 raise ValueError(
-                    'If "indices" is "symmetric", then '
-                    f"connectivity data should be the upper-triangular part of the "
-                    f"matrix. There are {data_len} estimated connections. But there "
-                    f"should be {expected_len} estimated connections."
+                    "If `indices` is 'lower' or 'upper', then connectivity data should "
+                    "be the lower- or upper-triangular part of the connectivity "
+                    f"matrix, respectively. Expected {expected_len} connections from "
+                    f"the {n_nodes} nodes, but got {self.n_estimated_nodes} "
+                    "connections."
+                )
+
+        else:  # indices = "all"
+            expected_len = n_nodes**2
+            if self.n_estimated_nodes != expected_len:
+                raise ValueError(
+                    "If `indices` is 'all', then connectivity data should be the full "
+                    f"connectivity matrix. Expected {expected_len} connections from "
+                    f"the {n_nodes} nodes, but got {self.n_estimated_nodes} "
+                    "connections."
                 )
 
     def copy(self):
@@ -686,10 +691,11 @@ class BaseConnectivity(EpochMixin):
 
         Returns
         -------
-        indices : ``'all'`` | ``'symmetric'`` | tuple of list
-            Either ``'all'`` for all-to-all connectivity, ``'symmetric'`` for symmetric
-            connectivity, or a tuple of lists representing the node-to-nodes that
-            connectivity was computed for.
+        indices : ``'all'`` | ``'lower'`` | ``'upper'`` | tuple of list
+            Either ``'all'`` for all-to-all connectivity, ``'lower'`` for
+            lower-triangular connectivity, ``'upper'`` for upper-triangular
+            connectivity, or a tuple of lists representing the seed and target nodes
+            that connectivity was computed between.
         """
         return self.attrs["indices"]
 
@@ -723,7 +729,7 @@ class BaseConnectivity(EpochMixin):
         #     size += self.metadata.memory_usage(index=True).sum()
         return size
 
-    def get_data(self, output="compact"):
+    def get_data(self, output="compact", missing="raise"):
         """Get connectivity data as a numpy array.
 
         Parameters
@@ -732,11 +738,17 @@ class BaseConnectivity(EpochMixin):
             How to format the output:
 
             - ``'raveled'`` will represent each connectivity matrix as a
-              ``(..., n_nodes_in * n_nodes_out, ...)`` array
+              ``(..., n_nodes_in * n_nodes_out, ...)`` array.
             - ``'dense'`` will return each connectivity matrix as a ``(..., n_nodes_in,
-              n_nodes_out, ...)`` array
-            - ``'compact'`` (default) will return ``'raveled'`` if ``indices`` were
-              defined as a tuple of arrays, or ``'dense'`` if ``indices='all'``
+              n_nodes_out, ...)`` array.
+            - ``'compact'`` (default) will return ``'raveled'`` if ``indices`` is
+              a tuple of arrays, or ``'dense'`` if ``indices is ``'all'``, ``'lower'``,
+              or ``'upper'``.
+        missing : ``'raise'`` | float
+            How to handle missing values in the dense connectivity matrix when these
+            cannot be filled in (see notes for more information). If ``'raise'``, an
+            error is raised. If a float, the missing values are filled with that float.
+            Ignored if ``output='raveled'``. Default is ``'raise'``.
 
         Returns
         -------
@@ -750,6 +762,31 @@ class BaseConnectivity(EpochMixin):
 
         Notes
         -----
+        **Handling missing values for dense outputs**
+
+        If ``indices`` is not ``'all'`` and ``output='dense'``, there may be missing
+        values from the full connectivity matrix that need to be filled in. There are
+        four cases to consider:
+
+        1. When ``indices`` is ``'lower'`` or ``'upper'``, there will be missing values.
+           If ``method`` is a connectivity method available in MNE-Connectivity, and the
+           the missing values can be inferred based on the existing ones, this will be
+           handled automatically.
+
+        2. When ``indices`` is ``'lower'`` or ``'upper'`` and ``method`` is not
+           recognised by MNE-Connectivity, or it is recognised and the missing values
+           cannot be inferred from the existing ones, the behaviour is determined by the
+           ``missing`` parameter.
+
+        3. When ``indices`` is a tuple and ``indices`` represents a subset of the full
+           connectivity matrix, the missing values will not be inferred, and the
+           behaviour is determined by the ``missing`` parameter.
+
+        4. When ``indices`` is a tuple and ``indices`` represents the full connectivity
+           matrix, there are no missing values to fill in.
+
+        **Handling dense outputs for multivariate connectivity**
+
         Because multivariate connectivity data can involve multiple channels per
         connection, it is not possible to represent the data in a dense matrix form
         where each row/column represent a single channel.
@@ -784,7 +821,7 @@ class BaseConnectivity(EpochMixin):
         multivariate_nodes = None
 
         if output == "compact":
-            if self.indices in ["all", "symmetric"]:
+            if self.indices in ["all", "lower", "upper"]:
                 output = "dense"
             else:
                 output = "raveled"
