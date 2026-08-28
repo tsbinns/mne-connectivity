@@ -360,27 +360,23 @@ con_epochs = spectral_connectivity_epochs(
 # epochs and are looking at theta activity. This might make the connectivity
 # measurements more sensitive to noise.
 
-# Average the results over connections to get global connectivity
-n_nodes = epochs.info["nchan"]
-n_connections = (n_channels * n_channels - n_channels) / 2
-global_con_epochs_array = (
-    con_epochs.get_data().sum(axis=0, keepdims=True) / n_connections
-)
-global_con_epochs_array = global_con_epochs_array[0]  # select theta frequency band
-
-# Plot the global connectivity over time
-global_con_epochs = TemporalConnectivity(
-    global_con_epochs_array,
+# Convert to TemporalConnectivity object for plotting over time
+con_epochs = TemporalConnectivity(
+    con_epochs.get_data()[:, 0, :],
     con_epochs.times,
     con_epochs.n_nodes,
     con_epochs.names,
     con_epochs.indices,
     con_epochs.method,
 )
-plot_temporal_connectivity(global_con_epochs, info=epochs.info)
+
+# Plot global connectivity by averaging results
+plot_temporal_connectivity(con_epochs, info=epochs.info, combine="mean", ci="sd")
 
 # Get the timepoint with highest global connectivity right after stimulus
-t_con_max = np.argmax(global_con_epochs_array[0, np.array(con_epochs.times) <= 0.5])
+t_con_max = np.argmax(
+    np.mean(con_epochs.get_data(), axis=0)[np.array(con_epochs.times) <= 0.5]
+)
 print(f"Global theta wPLI peaks {con_epochs.times[t_con_max]:.3f}s after stimulus")
 
 ###############################################################################
@@ -392,7 +388,7 @@ print(f"Global theta wPLI peaks {con_epochs.times[t_con_max]:.3f}s after stimulu
 
 # Plot the connectivity matrix at the timepoint with highest global wPLI
 max_con = Connectivity(
-    con_epochs.get_data()[:, 0, t_con_max],
+    con_epochs.get_data()[:, t_con_max],
     con_epochs.n_nodes,
     con_epochs.names,
     con_epochs.indices,
