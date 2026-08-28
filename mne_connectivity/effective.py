@@ -5,7 +5,7 @@
 import copy
 
 import numpy as np
-from mne.utils import logger, verbose
+from mne.utils import _check_option, _validate_type, logger, verbose
 
 from .base import (
     EpochSpectralConnectivity,
@@ -21,7 +21,7 @@ from .utils import fill_doc
 def phase_slope_index(
     data,
     names=None,
-    indices=None,
+    indices="all",
     sfreq=None,
     *,
     mode="multitaper",
@@ -85,10 +85,11 @@ def phase_slope_index(
            Storing multitaper weights in :class:`mne.time_frequency.EpochsTFR` objects
            requires ``mne >= 1.10``.
     %(names)s
-    indices : tuple of array_like | None
+    indices : tuple of array_like | ``'all'``
         Two array-likes with indices of connections for which to compute connectivity.
-        If ``None``, all connections are computed. See Notes of
-        :func:`~mne_connectivity.spectral_connectivity_epochs` for details.
+        If ``'all'``, all connections are computed. See notes of
+        :func:`~mne_connectivity.spectral_connectivity_epochs` for details. Default is
+        ``'all'``.
     sfreq : float | None
         The sampling frequency. Required if ``data`` is not an :class:`mne.Epochs`,
             :class:`mne.time_frequency.EpochsSpectrum`, or
@@ -156,7 +157,7 @@ def phase_slope_index(
 
         - ``(n_cons, n_bands)`` for ``'multitaper'`` or ``'fourier'`` modes
         - ``(n_cons, n_bands, n_times)`` for ``'cwt_morlet'`` mode
-        - ``n_cons = n_signals ** 2`` when ``indices=None``
+        - ``n_cons = n_signals ** 2`` when ``indices=''all''``
         - ``n_cons = len(indices[0])`` when ``indices`` is supplied
         - ``n_bands`` is the number of frequency bands defined by ``fmin`` and ``fmax``
 
@@ -171,6 +172,10 @@ def phase_slope_index(
     ----------
     .. footbibliography::
     """  # noqa: E501
+    _validate_type(indices, (tuple, str), "indices")
+    if isinstance(indices, str):
+        _check_option("indices", indices, ["all"], "if a string")
+
     logger.info("Estimating phase slope index (PSI)")
 
     # estimate the coherency
