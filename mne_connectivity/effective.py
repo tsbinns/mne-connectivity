@@ -174,7 +174,7 @@ def phase_slope_index(
     """  # noqa: E501
     _validate_type(indices, (tuple, str), "indices")
     if isinstance(indices, str):
-        _check_option("indices", indices, ["all"], "if a string")
+        _check_option("indices", indices, ["all"], " as a string")
 
     logger.info("Estimating phase slope index (PSI)")
 

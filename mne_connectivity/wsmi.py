@@ -361,9 +361,9 @@ def wsmi(
         Two array-likes with indices of connections for which to compute connectivity.
         For example, to compute connectivity between channels 0 and 2, and between
         channels 1 and 3, use ``indices = (np.array([0, 1]), np.array([2, 3]))``.
-        If ``'lower'``, compute lower-triangular connectivity. If ``'upper'``, compute
-        upper-triangular connectivity. If ``'all'``, compute all connections. Default is
-        ``'lower'``.
+        If ``'lower'``, compute lower-triangular part of connectivity matrix. If
+        ``'upper'``, compute upper-triangular part of connectivity matrix. If ``'all'``,
+        compute all connections. Default is ``'lower'``.
     sfreq : float | None
         The sampling frequency. Required if ``data`` is an array-like.
     names : array_like | None
@@ -442,7 +442,7 @@ def wsmi(
     # Check indices
     _validate_type(indices, (tuple, str), "indices")
     if isinstance(indices, str):
-        _check_option("indices", indices, ["lower", "upper", "all"], "if a string")
+        _check_option("indices", indices, ["lower", "upper", "all"], " as a string")
 
     # Handle both MNE Epochs and array inputs
     picks = None

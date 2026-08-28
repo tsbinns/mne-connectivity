@@ -458,7 +458,7 @@ class BaseConnectivity(EpochMixin):
     ):
         _validate_type(indices, (str, tuple), "indices")
         if isinstance(indices, str):
-            _check_option("indices", indices, ["all", "lower", "upper"])
+            _check_option("indices", indices, ["all", "lower", "upper"], " as a string")
 
         # prepare metadata pandas dataframe and ensure metadata is a Pandas
         # DataFrame object
@@ -821,7 +821,7 @@ class BaseConnectivity(EpochMixin):
         _check_option("output", output, ["raveled", "dense", "compact"])
         _validate_type(missing, (str, "numeric"), "missing")
         if isinstance(missing, str):
-            _check_option("missing", missing, ["raise"])
+            _check_option("missing", missing, ["raise"], " as a string")
         else:
             missing = float(missing)
 
