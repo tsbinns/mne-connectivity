@@ -16,6 +16,7 @@ try:  # MNE 1.13+
     from mne._numba import jit
 except ImportError:
     from mne.fixes import jit
+
 from mne.utils import _time_mask, logger, verbose
 from mne.utils.check import _check_option, _validate_type
 from mne.utils.docs import fill_doc
@@ -333,7 +334,7 @@ def wsmi(
     data,
     kernel,
     tau,
-    indices=None,
+    indices="lower",
     sfreq=None,
     names=None,
     tmin=None,
@@ -356,11 +357,13 @@ def wsmi(
     tau : int
         Time delay (lag; in samples) between consecutive pattern elements.
         Must be > 0.
-    indices : tuple of array_like | None
+    indices : tuple of array_like | ``'lower'`` | ``'upper'`` | ``'all'``
         Two array-likes with indices of connections for which to compute connectivity.
-        If ``None``, all connections are computed (lower triangular matrix).
         For example, to compute connectivity between channels 0 and 2, and between
         channels 1 and 3, use ``indices = (np.array([0, 1]), np.array([2, 3]))``.
+        If ``'lower'``, compute lower-triangular connectivity. If ``'upper'``, compute
+        upper-triangular connectivity. If ``'all'``, compute all connections. Default is
+        ``'lower'``.
     sfreq : float | None
         The sampling frequency. Required if ``data`` is an array-like.
     names : array_like | None
@@ -436,6 +439,11 @@ def wsmi(
     _validate_type(average, bool, "average")
     _check_option("anti_aliasing", anti_aliasing, (True, False, "auto"))
 
+    # Check indices
+    _validate_type(indices, (tuple, str), "indices")
+    if isinstance(indices, str):
+        _check_option("indices", indices, ["lower", "upper", "all"], "if a string")
+
     # Handle both MNE Epochs and array inputs
     picks = None
     is_epochs = isinstance(data, BaseEpochs)
@@ -454,8 +462,8 @@ def wsmi(
         data_for_comp = data.get_data()
         n_epochs, n_nodes, n_times_epoch = data_for_comp.shape
 
-        # Only exclude bad channels when indices is None
-        if indices is None:
+        # Exclude bad channels when custom tuple indices not passed
+        if not isinstance(indices, tuple):
             picks = _picks_to_idx(info, picks="all", exclude="bads")
             # Apply picks to data for computation
             data_for_comp = data_for_comp[:, picks, :]
@@ -508,10 +516,17 @@ def wsmi(
     )
 
     # Handle indices parameter
-    if indices is None:
-        logger.info("using all connections for lower-triangular matrix")
-        # Compute lower-triangular connections
-        indices_use = np.tril_indices(n_channels, k=-1)
+    if not isinstance(indices, tuple):
+        if indices == "all":
+            logger.info("Computing all connections for full connectivity matrix")
+            # Only compute tril, then transform to full matrix later
+            indices_use = np.tril_indices(n_channels, k=-1)
+        else:
+            logger.info(f"Computing connections for {indices}-triangular matrix")
+            if indices == "upper":
+                indices_use = np.triu_indices(n_channels, k=1)
+            else:  # "lower"
+                indices_use = np.tril_indices(n_channels, k=-1)
     else:
         # User provided explicit indices
         indices_use = check_indices(indices)
@@ -527,19 +542,7 @@ def wsmi(
                 f"Index {max_idx} is out of range for {n_channels} channels"
             )
 
-        # Check that indices don't refer to the same channel (no self-connectivity)
-        same_channel_mask = indices_use[0] == indices_use[1]
-        if np.any(same_channel_mask):
-            invalid_pairs = [
-                (indices_use[0][i], indices_use[1][i])
-                for i in range(len(indices_use[0]))
-                if same_channel_mask[i]
-            ]
-            raise ValueError(
-                f"Self-connectivity not supported. Found invalid pairs: {invalid_pairs}"
-            )
-
-        logger.info(f"computing connectivity for {len(indices_use[0])} connections")
+        logger.info(f"Computing connectivity for {len(indices_use[0])} connections")
 
     # unique signals for which we actually need to compute values for
     sig_idx = np.unique(np.r_[indices_use[0], indices_use[1]])
@@ -600,18 +603,24 @@ def wsmi(
     result = result.transpose(2, 0, 1)  # make epochs first dimension
 
     # --- Packaging results ---
-    if indices is None:
-        # Make it a lower-triangular matrix
-        result = np.tril(result, k=-1)
-        # Return all-to-all connectivity matrices raveled into a 1D array
+    if not isinstance(indices, tuple):
+        # Fill entries for bad channels
         if len(picks) < n_nodes:
             # Bad channels were excluded, need to create full n_nodes x n_nodes matrix
             # and fill only the good channel entries
-            con = np.zeros((n_epochs, n_nodes, n_nodes))
-            con[np.ix_(range(n_epochs), picks, picks)] = result
-        else:
-            con = result
-        con = con.reshape(n_epochs, -1)
+            full_result = np.full((n_epochs, n_nodes, n_nodes), np.nan)
+            full_result[np.ix_(range(n_epochs), picks, picks)] = result
+            result = full_result
+
+        # Ravel dense matrix
+        if indices == "all":
+            con = result.reshape(n_epochs, -1)
+        elif indices == "lower":
+            tril_inds = np.tril_indices(n_nodes, k=-1)
+            con = result[:, tril_inds[0], tril_inds[1]]
+        else:  # "upper":
+            triu_inds = np.triu_indices(n_nodes, k=1)
+            con = result[:, triu_inds[0], triu_inds[1]]
     else:
         # Extract only requested connections
         con = result[:, idx_map[0], idx_map[1]]
@@ -628,7 +637,7 @@ def wsmi(
         metadata=metadata,
     )
     if average:
-        result_connectivity = Connectivity(data=np.mean(con, axis=0), **con_kwargs)
+        result_connectivity = Connectivity(data=np.nanmean(con, axis=0), **con_kwargs)
     else:
         result_connectivity = EpochConnectivity(data=con, **con_kwargs)
 
