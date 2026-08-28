@@ -107,6 +107,7 @@ numpydoc_xref_ignore = {
     "object",
     "self.verbose",
     # shapes
+    "n",
     "n_times",
     "obj",
     "n_chan",

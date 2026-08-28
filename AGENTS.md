@@ -85,8 +85,10 @@ in your summary rather than quietly working around it.
 - `decoding/` — scikit-learn-style estimators (`fit`/`transform`, trailing-underscore
   attributes, their own plotting methods).
 - `datasets/` — simulated data with known ground truth; most tests are built on it.
-- `io.py` — the netCDF round-trip. `viz/` — circle and 3D plots, largely thin wrappers over
-  MNE-Python.
+- `io.py` — the netCDF round-trip. `viz/` — the plotting entry points (`plot_connectivity`
+  for matrices, `plot_spectral_connectivity`/`plot_temporal_connectivity` for lines with
+  circle-plot overviews, `plot_spectrotemporal_connectivity` for images) sharing one
+  `helpers.py`, plus the older circle and 3D plots that are thin wrappers over MNE-Python.
 - `utils/` — this package's docdict and the `indices` helpers.
 
 ## Things that bite
@@ -122,6 +124,18 @@ in your summary rather than quietly working around it.
 - Container state ends up as xarray `attrs` and must survive a netCDF round-trip: no `None`,
   no dicts, no nested structures — which is why some attributes are stored in a flattened
   or padded form. Add an attribute, add a save/read round-trip assertion.
+- **Container attributes are handed out by reference.** `con.names` returns the list living
+  in the xarray `attrs`, not a copy, so `names = con.names; names[idx] = ...` renames the
+  nodes on the object the caller passed in — and on any list they built it from. Copy before
+  you write.
+- **`con.indices` is not one type.** Depending on how the object was built it comes back as
+  `None`, a string, a tuple of 1-D integer arrays, a 2-D padded masked array, or a tuple of
+  *lists* of variable-length arrays. Anything that indexes into it (`indices[0][picks]`) has
+  to handle all of them, so normalize once at the entry point rather than type-sniffing later.
+- **Channel-level `picks`/`exclude` do not map onto connections one-to-one**, because a
+  connection has two endpoints. Say explicitly whether a connection survives when *any* or
+  *all* of its endpoints do — `picks` usually means "any", `exclude` usually means "none" —
+  and make the docstring and the code agree.
 - MNE-Python is a moving target here: CI runs against both `mne` stable and `mne` main, and
   a few private MNE APIs are used. Prefer public API, and guard imports with `try`/`except
   ImportError` plus a `# TODO VERSION` comment when you can't.
@@ -143,6 +157,12 @@ interaction in a known band, which is what most tests assert against. `viz/tests
 needs the MNE testing dataset plus pyvistaqt and Qt (skipped otherwise); run Qt/PyVista tests
 headless with `xvfb-run -a` or `QT_QPA_PLATFORM=offscreen`.
 
+Interactive Matplotlib plots are driven with `_fake_click` / `_fake_keypress` /
+`_fake_scroll` from `mne.viz.utils`, which work on any figure — these are plain Matplotlib
+figures, not MNE-Python's browser `MNEFigure`, so there is no `fig._fake_*` method to reach
+for. Call `fig.canvas.draw()` before faking events, or the coordinates go through
+pre-layout transforms; clicking a line at its own data coordinates also fires `pick_event`.
+
 Run `pre-commit run -a` before handing work back.
 
 ## Check the numbers, not just the shapes
@@ -163,6 +183,40 @@ Before calling a change done, pin the values down against something you know ind
 - a save/read round-trip through `read_connectivity` whenever containers are touched.
 
 Keep exploratory scripts in scratch space, and promote whatever they caught into a real test.
+
+## Look at it before you believe it
+
+Plotting code can pass every assertion and still be wrong on screen. Before calling a visual
+change done, render a representative figure, actually look at the PNG, *and* print the
+artists' properties — the two catch different bugs. A squashed colorbar or an unreadable
+pile of labels is obvious in an image and invisible to assertions; a connection drawn in the
+colormap's "bad" color merely looks dark until you print `line.get_color()`.
+
+```python
+import matplotlib; matplotlib.use("agg")
+fig, (line_ax, circle_ax) = plot_spectral_connectivity(con, show=False)
+fig.canvas.draw()  # constrained layout: transforms are not final until this runs
+fig.savefig("shot.png")  # then read the PNG
+print([line.get_color() for line in line_ax.lines], line_ax.get_title())
+```
+
+When you change plotting code that already exists, do it as an A/B. Script a battery of
+cases that saves one PNG per case — recording an exception as an outcome too, so the same
+script runs against both versions — render it, `git checkout HEAD -- <the files you
+touched>`, render into a second directory, restore, and compare the two pixel-wise. Most
+cases should come back identical, which is what tells you a refactor really was a no-op, and
+every difference should be one you can name and defend as a fix.
+
+The docstring is the test plan: exercise every documented *form* of every parameter, not
+just the common one — a shape the docstring promises but nothing ever plots (`(2,)`
+alongside `(n, 2)`) is exactly where these functions break. Cover the degenerate ends too:
+one connection, two nodes, a constant-valued array, all-negative data. For multivariate
+results those are not edge cases but the normal shape of a seed-and-target analysis, and
+because warnings are errors a `RuntimeWarning` out of a zero-width color range is a test
+failure, not a cosmetic complaint.
+
+Honor `show` through `mne.viz.utils.plt_show` rather than calling `plt.show()`, which warns
+under the Agg backend the tests run on, and return the figure(s) you made.
 
 ## Changelog
 

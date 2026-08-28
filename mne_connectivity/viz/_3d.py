@@ -65,7 +65,7 @@ def plot_sensors_connectivity(
     from mne_connectivity.base import BaseConnectivity
 
     if isinstance(con, BaseConnectivity):
-        con = con.get_data()
+        con = con.get_data("dense")
 
     renderer = _get_renderer(size=(600, 600), bgcolor=(0.5, 0.5, 0.5))
 
