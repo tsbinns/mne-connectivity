@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 from mne._fiff.pick import pick_info
 from mne.utils.check import _check_option, _validate_type
 from mne.utils.numerics import _time_mask
-from mne.viz.utils import _plot_masked_image
+from mne.viz.utils import _plot_masked_image, plt_show
 
 from ..utils import fill_doc
 from .helpers import (
@@ -277,8 +277,7 @@ def _plot_image_connectivity(
         figs.extend(type_figs)
         axes.extend(type_axes)
 
-    if show:
-        plt.show()
+    plt_show(show)
 
     if len(figs) == 1:
         return figs[0], axes[0]

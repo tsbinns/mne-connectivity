@@ -7,7 +7,7 @@ from matplotlib.colors import Normalize
 from matplotlib.ticker import MaxNLocator
 from mne._fiff.pick import pick_info
 from mne.utils.check import _check_option, _validate_type
-from mne.viz.utils import _plot_masked_image
+from mne.viz.utils import _plot_masked_image, plt_show
 
 from ..utils import fill_doc
 from .helpers import (
@@ -189,8 +189,7 @@ def plot_connectivity(
 
         figs.append(fig)
 
-    if show:
-        plt.show()
+    plt_show(show)
 
     if len(figs) == 1:
         return figs[0]

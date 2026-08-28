@@ -30,6 +30,10 @@ def _handle_data_and_indices(con, ch_info):
         is_multivar = _check_if_multivariate_indices(indices)
         if not is_multivar:
             indices = (np.array(indices[0]), np.array(indices[1]))
+        else:
+            # ragged multivariate indices can be stored as lists of arrays, but they
+            # need to be arrays themselves so that connections can be picked
+            indices = tuple(_ragged_to_array(idcs) for idcs in indices)
 
     elif indices is None or indices == "all":  # All-to-all connectivity
         # Construct explicit indices
@@ -67,6 +71,16 @@ def _handle_data_and_indices(con, ch_info):
     return data, indices, is_multivar
 
 
+def _ragged_to_array(indices):
+    """Convert (ragged) multivariate indices to an object array of channel sets."""
+    if isinstance(indices, np.ndarray):
+        return indices
+    array = np.empty(len(indices), dtype=object)
+    for idx, node in enumerate(indices):
+        array[idx] = node
+    return array
+
+
 def _check_info(info, ch_names):
     """Check (or create) info object and ensure all channels are present."""
     if info is None:
@@ -87,16 +101,24 @@ def _get_node_names_and_indices(ch_names, node_aliases, indices, is_multivar):
     """Get/create names of seeds/targets in connections and their indices."""
     if node_aliases is None:
         node_aliases = dict()
-    if any(
-        idx not in np.array((*indices[0], *indices[1])) for idx in node_aliases.keys()
-    ):
+    # nodes are channel indices for bivariate and (ragged) channel sets for
+    # multivariate connectivity, so compare them as scalars and tuples, respectively
+    all_nodes = set()
+    for node in (*indices[0], *indices[1]):
+        if not is_multivar:
+            all_nodes.add(int(node))
+        elif isinstance(node, np.ma.MaskedArray):
+            all_nodes.add(tuple(node.compressed()))
+        else:
+            all_nodes.add(tuple(node))
+    if any(idx not in all_nodes for idx in node_aliases.keys()):
         raise ValueError("All keys in `node_aliases` must be present in `con.indices`.")
 
     # Get names of nodes (via aliases, directly, or create for multivar connections)
     if not is_multivar:
         unique_nodes = np.unique([*indices[0], *indices[1]]).tolist()
         node_indices = (indices[0].copy(), indices[1].copy())  # use original indices
-        node_names = ch_names
+        node_names = list(ch_names)  # copy, so that aliases don't rename `con.names`
         for node_ind in unique_nodes:
             if node_ind in node_aliases.keys():
                 node_names[node_ind] = node_aliases[node_ind]

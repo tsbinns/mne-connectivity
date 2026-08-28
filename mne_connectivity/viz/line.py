@@ -8,6 +8,7 @@ from mne._fiff.pick import pick_info
 from mne.utils.check import _check_option, _validate_type
 from mne.utils.numerics import _time_mask
 from mne.viz.circle import _plot_connectivity_circle
+from mne.viz.utils import plt_show
 
 from ..utils import fill_doc
 from .helpers import (
@@ -218,6 +219,7 @@ def _plot_line_connectivity(
         _check_option("highlight", np.ndim(highlight), [1, 2], " number of dimensions")
         if np.shape(highlight)[-1] != 2:
             raise ValueError("`highlight` must have shape (2,) or (n, 2).")
+        highlight = np.atleast_2d(highlight)  # so a single period can be iterated over
 
     _validate_type(interactive, bool, "`interactive`", "bool")
     _validate_type(show, bool, "`show`", "bool")
@@ -317,6 +319,11 @@ def _plot_line_connectivity(
             circle_con, circle_con_order = _get_circle_con(
                 circle_indices, n_circle_nodes, type_connection_colors, selection
             )
+            # avoid a zero colour range (e.g. for a single pair of nodes), which
+            # would make MNE's circle plot divide by zero
+            circle_vmin, circle_vmax = circle_con.min(), circle_con.max()
+            if circle_vmin == circle_vmax:
+                circle_vmax = circle_vmin + 1
 
             circle_ax = fig.add_subplot(1, 3, 3, polar=True)
 
@@ -333,6 +340,8 @@ def _plot_line_connectivity(
                 facecolor="white",
                 textcolor="black",
                 colormap=cmap,
+                vmin=circle_vmin,
+                vmax=circle_vmax,
                 colorbar=False,
                 linewidth=1.5,
                 fontsize_names=8,
@@ -403,8 +412,7 @@ def _plot_line_connectivity(
         figs.append(fig)
         axes.append((line_ax, circle_ax))
 
-    if show:
-        plt.show()
+    plt_show(show)
 
     if len(figs) == 1:
         return figs[0], axes[0]
