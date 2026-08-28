@@ -987,11 +987,11 @@ def spectral_connectivity_epochs(
     :class:`mne.time_frequency.EpochsSpectrum` or :class:`mne.time_frequency.EpochsTFR`
     objects.
 
-    By default, the connectivity between all signals is computed (only connections
-    corresponding to the lower-triangular part of the connectivity matrix). If one is
-    only interested in the connectivity between some signals, the ``indices`` parameter
-    can be used. For example, to compute the connectivity between the signal with index
-    0 and signals "2, 3, 4" (a total of 3 connections) one can use the following::
+    By default, the connectivity corresponding to the lower-triangular part of the
+    connectivity matrix is computed. If one is only interested in the connectivity
+    between some signals, the ``indices`` parameter can be used. For example, to compute
+    the connectivity between the signal with index 0 and signals "2, 3, 4" (a total of 3
+    connections) one can use the following::
 
         indices = (np.array([0, 0, 0]),    # row indices
                    np.array([2, 3, 4]))    # col indices
@@ -1002,10 +1002,10 @@ def spectral_connectivity_epochs(
     In this case ``con.get_data().shape = (3, n_freqs)``. The connectivity scores are in
     the same order as defined indices.
 
-    For multivariate methods, this is handled differently. If ``indices`` is specified,
-    seed and target indices for each connection should be specified as nested
-    array-likes. For example, to compute the connectivity between signals (0, 1) ->
-    (2, 3) and (0, 1) -> (4, 5), indices should be specified as::
+    For multivariate methods, this is handled differently. ``indices`` must be specified
+    as a tuple, where seed and target indices for each connection should be specified as
+    nested array-likes. For example, to compute the connectivity between signals (0, 1)
+    -> (2, 3) and (0, 1) -> (4, 5), indices should be specified as::
 
         indices = (np.array([[0, 1], [0, 1]]),  # seeds
                    np.array([[2, 3], [4, 5]]))  # targets
@@ -1194,7 +1194,7 @@ def spectral_connectivity_epochs(
     is_tfr_con = False
     if isinstance(data, BaseEpochs | EpochsSpectrum | EpochsTFR):
         # Find good channels
-        if indices is None:
+        if not isinstance(indices, tuple):
             picks = _picks_to_idx(data.info, picks="all", exclude="bads")
 
         names = data.ch_names
