@@ -15,8 +15,9 @@ def _get_full_connectivity(data, indices, n_nodes, method, missing):
     if indices == "all":
         return _make_square(data, indices, n_nodes)
     if isinstance(indices, tuple):
-        full_indices = np.indices((n_nodes, n_nodes))
+        indices = tuple(np.asarray(ind) for ind in indices)
         sorted_seeds = np.argsort(indices[0])
+        full_indices = np.indices((n_nodes, n_nodes))
         if not np.array_equal(
             indices[0][sorted_seeds], full_indices[0].ravel()
         ) or not np.array_equal(indices[1][sorted_seeds], full_indices[1].ravel()):
@@ -28,17 +29,16 @@ def _get_full_connectivity(data, indices, n_nodes, method, missing):
         return _make_square(data, indices, n_nodes)
 
     # Check if we can infer missing entries in the data for the method
-    if method not in CAN_SYMMETRISE:
+    if method not in _CAN_SYMMETRISE:
         raise ValueError(
             f"Cannot fill missing values for connectivity data for the method {method}."
         )
     data = _make_square(data, indices, n_nodes)
-    return CAN_SYMMETRISE[method](data, indices)
+    return _CAN_SYMMETRISE[method](data, indices)
 
 
 def _make_square(data, indices, n_nodes, fill=0.0):
     """Make raveled connectivity data square [n_nodes, n_nodes(, ...)]."""
-    fill = 0.0
     if np.iscomplexobj(data):
         fill = fill + 1j * fill
     square_matrix = np.full(
@@ -60,6 +60,10 @@ def _make_square(data, indices, n_nodes, fill=0.0):
 
 def _make_symmetric(data, indices, diag, transpose_extra=None):
     """Make the connectivity data symmetric."""
+    assert indices in ("lower", "upper"), (
+        "Expected indices to be 'lower' or 'upper' for symmetrisation, got "
+        f"{indices}. Please contact the MNE-Connectivity developers."
+    )
     # Always transpose
     data = data + data.transpose(1, 0, *range(2, data.ndim))
     # Perform something on top of the transpose if needed
@@ -125,7 +129,7 @@ def _symmetrise_envelope_correlation(data, indices):
     return _make_symmetric(data, indices, diag=1.0)
 
 
-CAN_SYMMETRISE = {
+_CAN_SYMMETRISE = {
     "coh": _symmetrise_coh,
     "cohy": _symmetrise_cohy,
     "imcoh": _symmetrise_imcoh,

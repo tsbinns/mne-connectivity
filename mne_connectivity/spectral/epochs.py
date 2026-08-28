@@ -38,7 +38,13 @@ from mne.utils import (
 )
 
 from ..base import SpectralConnectivity, SpectroTemporalConnectivity
-from ..utils import _check_multivariate_indices, check_indices, fill_doc
+from ..utils import (
+    _CAN_SYMMETRISE,
+    _check_multivariate_indices,
+    _make_square,
+    check_indices,
+    fill_doc,
+)
 from .epochs_bivariate import _CON_METHOD_MAP_BIVARIATE
 from .epochs_multivariate import (
     _CON_METHOD_MAP_MULTIVARIATE,
@@ -1555,25 +1561,40 @@ def spectral_connectivity_epochs(
         freqs_used = freqs_bands
         freqs_used = [[np.min(band), np.max(band)] for band in freqs_used]
 
-    if not isinstance(indices, tuple):
-        # return all-to-all connectivity matrices raveled into a 1D array
-        logger.info("    assembling connectivity matrix")
+    # Make full connectivity matrix from lower-triangular part
+    if indices == "all":
+        for method_idx in range(n_methods):
+            this_con = _make_square(con[method_idx], "lower", n_good_signals)
+            this_con = _CAN_SYMMETRISE[method[method_idx]](this_con, "lower")
+            con[method_idx] = this_con.reshape((-1,) + this_con.shape[2:])
+
+    # Fill entries for bad channels
+    if not isinstance(indices, tuple) and n_signals != n_good_signals:
+        # Bad channels were excluded, need to create full (n_nodes x n_nodes) matrix and
+        # fill only the good channel entries
         con_flat = con
         con = list()
         for this_con_flat in con_flat:
+            if indices == "all":
+                out_indices = np.indices((n_signals, n_signals))
+            elif indices == "lower":
+                out_indices = np.tril_indices(n_signals, k=-1)
+            else:  # "upper"
+                out_indices = np.triu_indices(n_signals, k=1)
+
+            out_indices = np.ravel_multi_index(out_indices, (n_signals, n_signals))
+            good_indices = np.ravel_multi_index(indices_use, (n_signals, n_signals))
+            insert_indices = np.searchsorted(out_indices, good_indices)
+
             fill = np.nan
             if np.iscomplexobj(this_con_flat):
                 fill = fill + 1j * fill
             this_con = np.full(
-                (n_signals, n_signals) + this_con_flat.shape[1:],
+                (len(out_indices),) + this_con_flat.shape[1:],
                 fill,
                 dtype=this_con_flat.dtype,
             )
-            this_con[indices_use] = this_con_flat
-
-            # ravel 2D connectivity into a 1D array
-            # while keeping other dimensions
-            this_con = this_con.reshape((n_signals**2,) + this_con_flat.shape[1:])
+            this_con[insert_indices] = this_con_flat
             con.append(this_con)
 
     # number of nodes in the original data

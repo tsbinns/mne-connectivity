@@ -21,7 +21,13 @@ from mne.time_frequency import (
 from mne.utils import _check_option, _validate_type, logger, verbose
 
 from ..base import EpochSpectralConnectivity, SpectralConnectivity
-from ..utils import _check_multivariate_indices, check_indices, fill_doc
+from ..utils import (
+    _CAN_SYMMETRISE,
+    _check_multivariate_indices,
+    _make_square,
+    check_indices,
+    fill_doc,
+)
 from .epochs import _compute_freq_mask
 from .epochs_multivariate import (
     _CON_METHOD_MAP_MULTIVARIATE,
@@ -752,28 +758,47 @@ def spectral_connectivity_time(
             # convert to [seeds/targets x epochs x cons x [comps] x channels x freqs]
             conn_patterns[m] = np.moveaxis(conn_patterns[m], 1, 0)
 
-    if not isinstance(indices, tuple):
-        # return all-to-all connectivity matrices raveled into a 1D array
+    # Make full connectivity matrix from lower-triangular part
+    if indices == "all":
+        for m in method:
+            this_con = np.moveaxis(conn[m], 0, -1)  # move epochs to last axis
+            this_con = _make_square(this_con, "lower", n_good_signals)
+            this_con = _CAN_SYMMETRISE[m](this_con, "lower")
+            this_con = this_con.reshape((-1,) + this_con.shape[2:])
+            conn[m] = np.moveaxis(this_con, -1, 0)  # move epochs back to first axis
+
+    # Fill entries for bad channels
+    if not isinstance(indices, tuple) and n_signals != n_good_signals:
+        # Bad channels were excluded, need to create full (n_nodes x n_nodes) matrix and
+        # fill only the good channel entries
         conn_flat = conn
         conn = dict()
         for m in method:
+            if indices == "all":
+                out_indices = np.indices((n_signals, n_signals))
+            elif indices == "lower":
+                out_indices = np.tril_indices(n_signals, k=-1)
+            else:  # "upper"
+                out_indices = np.triu_indices(n_signals, k=1)
+
+            out_indices = np.ravel_multi_index(out_indices, (n_signals, n_signals))
+            good_indices = np.ravel_multi_index(indices_use, (n_signals, n_signals))
+            insert_indices = np.searchsorted(out_indices, good_indices)
+
             fill = np.nan
             if np.iscomplexobj(conn_flat[m]):
                 fill = fill + 1j * fill
-            this_conn = np.full(
-                (n_epochs, n_signals, n_signals) + conn_flat[m].shape[2:],
+            this_con = np.full(
+                (
+                    conn_flat[m].shape[0],
+                    len(out_indices),
+                )
+                + conn_flat[m].shape[2:],
                 fill,
                 dtype=conn_flat[m].dtype,
             )
-            this_conn[:, source_idx, target_idx] = conn_flat[m]
-            this_conn = this_conn.reshape(
-                (
-                    n_epochs,
-                    n_signals**2,
-                )
-                + conn_flat[m].shape[2:]
-            )
-            conn[m] = this_conn
+            this_con[:, insert_indices] = conn_flat[m]
+            conn[m] = this_con
 
     # create the connectivity containers
     out = []

@@ -153,7 +153,7 @@ def test_spectral_connectivity_parallel(method, mode, tmp_path):
             data,
             method=method,
             mode=mode,
-            indices=None,
+            indices="lower",
             mt_adaptive=adaptive,
             mt_low_bias=True,
             mt_bandwidth=mt_bandwidth,
@@ -263,7 +263,7 @@ def test_spectral_connectivity(method, mode):
             data,
             method=method,
             mode=mode,
-            indices=None,
+            indices="lower",
             sfreq=sfreq,
             fmin=5.0,
             mt_adaptive=adaptive,
@@ -718,7 +718,7 @@ def test_spectral_connectivity_epochs_multivariate(method, n_components):
     # check all-to-all conn. computed for CaCoh/MIC/MIM when no indices given
     if method in ["cacoh", "mic", "mim"]:
         con = spectral_connectivity_epochs(
-            data, method=method, mode=mode, indices=None, gc_n_lags=gc_n_lags
+            data, method=method, mode=mode, indices="lower", gc_n_lags=gc_n_lags
         )
         assert con.indices is None
         assert con.n_nodes == n_signals
@@ -1055,7 +1055,7 @@ def test_multivar_spectral_connectivity_epochs_error_catch(method, mode):
         # check no indices caught
         with pytest.raises(ValueError, match="indices must be specified"):
             spectral_connectivity_epochs(
-                data, method=method, indices=None, **conn_kwargs
+                data, method=method, indices="lower", **conn_kwargs
             )
 
         # check intersecting indices caught
@@ -1172,13 +1172,13 @@ def test_multivar_spectral_connectivity_flipped_indices():
 @pytest.mark.parametrize(
     "conn_func", [spectral_connectivity_epochs, spectral_connectivity_time]
 )
-@pytest.mark.parametrize("method", ["coh", "cacoh"])
 @pytest.mark.parametrize("picks", [None, "all", "goods"])
 @pytest.mark.parametrize("data_as_spectra", [False, True])
-def test_spectral_connectivity_bad_channels(conn_func, method, picks, data_as_spectra):
+def test_spectral_connectivity_bad_channels(conn_func, picks, data_as_spectra):
     """Test spectral_connectivity_epochs bad channels handling.
 
-    Important to test indices handling with both bivariate and multivariate methods.
+    Don't need to test with multivariate connectivity when indices must always be
+    specified as a tuple.
     """
     # Simulate data
     rng = np.random.default_rng(0)
@@ -1206,12 +1206,10 @@ def test_spectral_connectivity_bad_channels(conn_func, method, picks, data_as_sp
             indices = (np.array([1, 2, 2]), np.array([0, 0, 1]))
         else:  # ("goods") explicit bad exclusion
             indices = (np.array([2]), np.array([0]))
-        if method != "coh":  # multivariate indices must be nested
-            indices = tuple([[i] for i in ind] for ind in indices)
         n_cons = len(indices[0])
     else:
-        indices = None  # implicit bad exclusion
-        n_cons = n_channels**2 if method == "coh" else 1
+        indices = "lower"  # implicit bad exclusion
+        n_cons = n_channels * (n_channels - 1) // 2
 
     # Compute connectivity
     conn_kwargs = dict()
@@ -1221,36 +1219,33 @@ def test_spectral_connectivity_bad_channels(conn_func, method, picks, data_as_sp
     else:
         conn_kwargs["freqs"] = con_freqs
         conn_kwargs["average"] = True
-    con = conn_func(data, method=method, indices=indices, **conn_kwargs)
+    con = conn_func(data, method="coh", indices=indices, **conn_kwargs)
     n_freqs = len(con.freqs)
 
     # Check connectivity object properties
     assert con.n_nodes == n_channels
     assert con.names == data.ch_names
 
-    # Check dense shape same regardless of indices (not for multivariate connectivity)
-    if method == "coh":
-        assert con.get_data("dense").shape == (n_channels, n_channels, n_freqs)
+    # Check dense shape same regardless of indices
+    missing = np.nan if indices != "lower" else "raise"
+    assert con.get_data("dense", missing=missing).shape == (
+        n_channels,
+        n_channels,
+        n_freqs,
+    )
 
     # Check raveled shape and contents depends on indices
-    raveled_data = np.abs(con.get_data("raveled"))  # abs for CaCoh
+    raveled_data = con.get_data("raveled")
     assert raveled_data.shape == (n_cons, n_freqs)  # n_cons depends on picks
     if picks is not None:
-        # with "all" channels used, bads entries are present and are non-zero
+        # with "all" channels used, bads entries are present and are not NaN
         # with "goods" channels used, bads entries are non-existent
-        # in both cases, all entries are non-zero
-        assert_array_less(0, raveled_data)
-        if method != "coh":  # check shape of patterns (1 channel per connection)
-            assert np.shape(con.attrs["patterns"]) == (2, n_cons, 1, n_freqs)
-    else:  # indices=None → all-to-all connectivity
-        if method == "coh":  # bads entries present, but filled with zeros
-            assert_array_equal(raveled_data[[3, 7]], 0)  # bads indices
-            # (use np.ravel_multi_index to find dense array indices in raveled array)
-        else:  # only good channs used for single multivar connection (so all non-zero)
-            assert_array_less(0, raveled_data)
-            # but we can check shape (all chans) and entries (bads=zeros) of patterns
-            assert np.shape(con.attrs["patterns"]) == (2, n_cons, n_channels, n_freqs)
-            assert_array_equal(0, np.array(con.attrs["patterns"])[:, :, 1, :])
+        # in both cases, all entries are not NaN
+        assert not np.any(np.isnan(raveled_data))
+    else:  # indices="lower"
+        # bads entries present, but filled with NaNs
+        assert_array_equal(raveled_data[[0, 2]], np.nan)  # bads indices
+        # (use np.ravel_multi_index to find dense array indices in raveled array)
 
 
 def test_spectral_connectivity_freq_decim():
@@ -2065,7 +2060,7 @@ def test_multivar_spectral_connectivity_time_error_catch(method, mode):
         # check no indices caught
         with pytest.raises(ValueError, match="indices must be specified"):
             spectral_connectivity_time(
-                data, freqs, method=method, mode=mode, indices=None
+                data, freqs, method=method, mode=mode, indices="lower"
             )
 
         # check intersecting indices caught
@@ -2185,14 +2180,9 @@ def test_multivar_save_load(tmp_path):
 @pytest.mark.parametrize(
     "method", ["coh", "imcoh", "cohy", "plv", "pli", "wpli", "ciplv"]
 )
-@pytest.mark.parametrize("indices", [None, ([0, 1], [2, 3])])
+@pytest.mark.parametrize("indices", ["lower", "all", "upper", ([0, 1], [2, 3])])
 def test_spectral_connectivity_indices_roundtrip_io(tmp_path, method, indices):
-    """Test that indices values and type is maintained after saving.
-
-    If `indices` is None, `indices` in the returned connectivity object should
-    be None, otherwise, `indices` should be a tuple. The type of `indices` and
-    its values should be retained after saving and reloading.
-    """
+    """Test that indices values and type is maintained after saving."""
     epochs = make_signals_in_freq_bands(
         n_seeds=2,
         n_targets=2,
@@ -2216,7 +2206,7 @@ def test_spectral_connectivity_indices_roundtrip_io(tmp_path, method, indices):
         con.save(tmp_file)
         read_con = read_connectivity(tmp_file)
 
-        if indices is not None:
+        if isinstance(indices, tuple):
             # check indices of same type (tuples)
             assert isinstance(con.indices, tuple) and isinstance(
                 read_con.indices, tuple
@@ -2224,7 +2214,7 @@ def test_spectral_connectivity_indices_roundtrip_io(tmp_path, method, indices):
             # check indices have same values
             assert np.all(np.array(con.indices) == np.array(read_con.indices))
         else:
-            assert con.indices is None and read_con.indices is None
+            assert con.indices == indices and read_con.indices == indices
 
 
 @pytest.mark.parametrize("method", ["cacoh", "mic", "mim", _gc, _gc_tr])
