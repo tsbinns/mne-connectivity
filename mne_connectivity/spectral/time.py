@@ -439,7 +439,7 @@ def spectral_connectivity_time(
     if isinstance(indices, str):
         _check_option("indices", indices, ("lower", "upper", "all"), " as a string")
     if multivariate_con and not isinstance(indices, tuple):
-        raise TypeError(
+        raise ValueError(
             "`indices` must be a tuple of array-likes for multivariate connectivity "
             f"methods, got {indices}."
         )
