@@ -41,4 +41,12 @@ from .utils import (
     seed_target_multivariate_indices,
 )
 from .vector_ar import select_order, vector_auto_regression
+from .viz import (
+    plot_connectivity,
+    plot_connectivity_circle,
+    plot_sensors_connectivity,
+    plot_spectral_connectivity,
+    plot_spectrotemporal_connectivity,
+    plot_temporal_connectivity,
+)
 from .wsmi import wsmi
