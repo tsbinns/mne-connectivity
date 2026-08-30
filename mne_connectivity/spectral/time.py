@@ -122,16 +122,7 @@ def spectral_connectivity_time(
     average : bool
         Average connectivity scores over epochs. If ``True``, output will be an instance
         of :class:`SpectralConnectivity`, otherwise :class:`EpochSpectralConnectivity`.
-    indices : tuple of array_like | ``'lower'`` | ``'upper'`` | ``'all'``
-        Two array-likes with indices of connections for which to compute connectivity.
-        If a bivariate method is called, each array for the seeds and targets should
-        contain the channel indices for each bivariate connection. If a multivariate
-        method is called, a tuple must be provided, and each array for the seeds and
-        targets should consist of nested  arrays containing the channel indices for each
-        multivariate connection. If ``'lower'``, compute lower-triangular part of
-        connectivity matrix. If ``'upper'``, compute upper-triangular part of
-        connectivity matrix. If ``'all'``, compute all connections. Default is
-        ``'lower'``.
+    %(indices_with_str_with_multivar)s
     sfreq : float | None
         The sampling frequency. Required if ``data`` is not an :class:`mne.Epochs` or
         :class:`mne.time_frequency.EpochsTFR` object.
@@ -260,33 +251,9 @@ def spectral_connectivity_time(
 
     Complex multitaper, or Morlet coefficients can also be passed in as data in the form
     of :class:`mne.time_frequency.EpochsTFR` objects.
-
-    By default, the connectivity corresponding to the lower-triangular part of the
-    connectivity matrix is computed. If one is only interested in the connectivity
-    between some signals, the ``indices`` parameter can be used. For example, to compute
-    the connectivity between the signal with index 0 and signals "2, 3, 4" (a total of 3
-    connections) one can use the following::
-
-        indices = (np.array([0, 0, 0]),    # row indices
-                   np.array([2, 3, 4]))    # col indices
-
-        con = spectral_connectivity_time(data, method='coh',
-                                         indices=indices, ...)
-
-    In this case ``con.get_data().shape = (3, n_freqs)``. The connectivity scores are in
-    the same order as defined indices.
-
-    For multivariate methods, this is handled differently. ``indices`` must be specified
-    as a tuple, where seed and target indices for each connection should be specified as
-    nested array-likes. For example, to compute the connectivity between signals (0, 1)
-    -> (2, 3) and (0, 1) -> (4, 5), indices should be specified as::
-
-        indices = (np.array([[0, 1], [0, 1]]),  # seeds
-                   np.array([[2, 3], [4, 5]]))  # targets
-
-    More information on working with multivariate indices and handling connections where
-    the number of seeds and targets are not equal can be found in the
-    :doc:`../auto_examples/handling_ragged_arrays` example.
+    %(tri_indices_efficiency_note)s
+    %(tuple_bivar_indices_note)s
+    %(tuple_multivar_indices_note)s
 
     **Supported Connectivity Measures**
 

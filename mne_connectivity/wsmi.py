@@ -19,11 +19,10 @@ except ImportError:
 
 from mne.utils import _time_mask, logger, verbose
 from mne.utils.check import _check_option, _validate_type
-from mne.utils.docs import fill_doc
 from scipy.signal import butter, filtfilt
 
 from .base import Connectivity, EpochConnectivity
-from .utils import check_indices
+from .utils import check_indices, fill_doc
 
 
 def _define_symbols(kernel):
@@ -328,8 +327,8 @@ def _validate_kernel(kernel, tau):
         )
 
 
-@fill_doc
 @verbose
+@fill_doc
 def wsmi(
     data,
     kernel,
@@ -357,13 +356,7 @@ def wsmi(
     tau : int
         Time delay (lag; in samples) between consecutive pattern elements.
         Must be > 0.
-    indices : tuple of array_like | ``'lower'`` | ``'upper'`` | ``'all'``
-        Two array-likes with indices of connections for which to compute connectivity.
-        For example, to compute connectivity between channels 0 and 2, and between
-        channels 1 and 3, use ``indices = (np.array([0, 1]), np.array([2, 3]))``.
-        If ``'lower'``, compute lower-triangular part of connectivity matrix. If
-        ``'upper'``, compute upper-triangular part of connectivity matrix. If ``'all'``,
-        compute all connections. Default is ``'lower'``.
+    %(indices_with_str_only_bivar)s
     sfreq : float | None
         The sampling frequency. Required if ``data`` is an array-like.
     names : array_like | None
@@ -427,6 +420,8 @@ def wsmi(
     1. Symbolic transformation of time series using ordinal patterns
     2. Computation of mutual information between symbolic sequences
     3. Weighting based on pattern distance for enhanced sensitivity
+    %(tri_indices_efficiency_note)s
+    %(tuple_bivar_indices_note)s
 
     .. versionadded:: 0.8
 
