@@ -5,7 +5,7 @@
 import copy
 
 import numpy as np
-from mne.utils import _check_option, _validate_type, logger, verbose
+from mne.utils import logger, verbose
 
 from .base import (
     EpochSpectralConnectivity,
@@ -21,7 +21,7 @@ from .utils import fill_doc
 def phase_slope_index(
     data,
     names=None,
-    indices="all",
+    indices="lower",
     sfreq=None,
     *,
     mode="multitaper",
@@ -172,10 +172,6 @@ def phase_slope_index(
     ----------
     .. footbibliography::
     """  # noqa: E501
-    _validate_type(indices, (tuple, str), "indices")
-    if isinstance(indices, str):
-        _check_option("indices", indices, ["all"], " as a string")
-
     logger.info("Estimating phase slope index (PSI)")
 
     # estimate the coherency
@@ -273,7 +269,7 @@ def phase_slope_index(
 def phase_slope_index_time(
     data,
     freqs=None,
-    indices=None,
+    indices="lower",
     sfreq=None,
     *,
     mode="cwt_morlet",
@@ -500,7 +496,8 @@ def phase_slope_index_time(
 def _compute_psi(cohy, freqs, bands, freq_dim):
     """Compute Phase Slope Index (PSI) from coherency data."""
     # Allocate space for output
-    out_shape = list(cohy.shape)
+    data = cohy.get_data("raveled")
+    out_shape = list(data.shape)
     out_shape[freq_dim] = len(bands)
     psi = np.zeros(out_shape, dtype=np.float64)
 
@@ -523,9 +520,7 @@ def _compute_psi(cohy, freqs, bands, freq_dim):
         for fi, fj in zip(freq_idx, freq_idx[1:]):
             idx_fi[freq_dim] = fi
             idx_fj[freq_dim] = fj
-            acc += (
-                np.conj(cohy.get_data()[tuple(idx_fi)]) * cohy.get_data()[tuple(idx_fj)]
-            )
+            acc += np.conj(data[tuple(idx_fi)]) * data[tuple(idx_fj)]
 
         idx_fi[freq_dim] = band_idx
         psi[tuple(idx_fi)] = np.imag(acc)
