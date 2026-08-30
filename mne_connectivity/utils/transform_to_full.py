@@ -119,6 +119,11 @@ def _symmetrise_dpli(data, indices):
     return _make_symmetric(data, indices, diag=0.5, transpose_extra=lambda x: 1.0 - x)
 
 
+def _symmetrise_psi(data, indices):
+    """Symmetrise phase slope index data."""
+    return _make_symmetric(data, indices, diag=0.0)
+
+
 def _symmetrise_smi(data, indices):
     """Symmetrise symbolic mutual information data."""
     return _make_symmetric(data, indices, diag=0.0)
@@ -141,6 +146,7 @@ _CAN_SYMMETRISE = {
     "dpli": _symmetrise_dpli,
     "wpli": _symmetrise_pli,
     "wpli2_debiased": _symmetrise_pli,
+    "phase-slope-index": _symmetrise_psi,
     "SMI": _symmetrise_smi,
     "wSMI": _symmetrise_smi,
     "envelope correlation": _symmetrise_envelope_correlation,
