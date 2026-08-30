@@ -29,12 +29,12 @@ def _get_full_connectivity(data, indices, n_nodes, method, missing):
         return _make_square(data, indices, n_nodes)
 
     # Check if we can infer missing entries in the data for the method
-    if method not in _CAN_SYMMETRISE:
+    if method not in _CAN_FILL_MISSING:
         raise ValueError(
             f"Cannot fill missing values for connectivity data for the method {method}."
         )
     data = _make_square(data, indices, n_nodes)
-    return _CAN_SYMMETRISE[method](data, indices)
+    return _CAN_FILL_MISSING[method](data, indices)
 
 
 def _make_square(data, indices, n_nodes, fill=0.0):
@@ -58,8 +58,8 @@ def _make_square(data, indices, n_nodes, fill=0.0):
     return square_matrix
 
 
-def _make_symmetric(data, indices, diag, transpose_extra=None):
-    """Make the connectivity data symmetric."""
+def _make_full(data, indices, diag, transpose_extra=None):
+    """Fill missing values in the connectivity data."""
     assert indices in ("lower", "upper"), (
         "Expected indices to be 'lower' or 'upper' for symmetrisation, got "
         f"{indices}. Please contact the MNE-Connectivity developers."
@@ -79,75 +79,45 @@ def _make_symmetric(data, indices, diag, transpose_extra=None):
     return data
 
 
-def _symmetrise_coh(data, indices):
-    """Symmetrise coherence data."""
-    return _make_symmetric(data, indices, diag=1.0)
+def _transpose_zero_diag(data, indices):
+    """Fill missing values by transposing, with zeros on the diagonal."""
+    return _make_full(data, indices, diag=0.0)
 
 
-def _symmetrise_cohy(data, indices):
-    """Symmetrise coherency data."""
-    return _make_symmetric(data, indices, diag=1.0 + 0.0j, transpose_extra=np.conj)
+def _transpose_one_diag(data, indices):
+    """Fill missing values by transposing, with ones on the diagonal."""
+    return _make_full(data, indices, diag=1.0)
 
 
-def _symmetrise_imcoh(data, indices):
-    """Symmetrise imaginary part of coherency data."""
-    return _make_symmetric(data, indices, diag=0.0, transpose_extra=lambda x: -x)
+def _transpose_conj_one_diag(data, indices):
+    """Fill missing values by transposing, with ones on the diagonal and conjugate."""
+    return _make_full(data, indices, diag=1.0 + 0.0j, transpose_extra=np.conj)
 
 
-def _symmetrise_plv(data, indices):
-    """Symmetrise phase-locking value data."""
-    return _make_symmetric(data, indices, diag=1.0)
+def _transpose_sign_flip_zero_diag(data, indices):
+    """Fill missing values by transposing with sign flip, and zeros on the diagonal."""
+    return _make_full(data, indices, diag=0.0, transpose_extra=lambda x: -x)
 
 
-def _symmetrise_ciplv(data, indices):
-    """Symmetrise corrected imaginary part of phase-locking value data."""
-    return _make_symmetric(data, indices, diag=0.0)
+def _fill_dpli(data, indices):
+    """Fill missing directed phase lag index values."""
+    return _make_full(data, indices, diag=0.5, transpose_extra=lambda x: 1.0 - x)
 
 
-def _symmetrise_ppc(data, indices):
-    """Symmetrise pairwise phase consistency data."""
-    return _make_symmetric(data, indices, diag=1.0)
-
-
-def _symmetrise_pli(data, indices):
-    """Symmetrise phase lag index data."""
-    return _make_symmetric(data, indices, diag=0.0)
-
-
-def _symmetrise_dpli(data, indices):
-    """Symmetrise directed phase lag index data."""
-    return _make_symmetric(data, indices, diag=0.5, transpose_extra=lambda x: 1.0 - x)
-
-
-def _symmetrise_psi(data, indices):
-    """Symmetrise phase slope index data."""
-    return _make_symmetric(data, indices, diag=0.0)
-
-
-def _symmetrise_smi(data, indices):
-    """Symmetrise symbolic mutual information data."""
-    return _make_symmetric(data, indices, diag=0.0)
-
-
-def _symmetrise_envelope_correlation(data, indices):
-    """Symmetrise envelope correlation data."""
-    return _make_symmetric(data, indices, diag=1.0)
-
-
-_CAN_SYMMETRISE = {
-    "coh": _symmetrise_coh,
-    "cohy": _symmetrise_cohy,
-    "imcoh": _symmetrise_imcoh,
-    "plv": _symmetrise_plv,
-    "ciplv": _symmetrise_ciplv,
-    "ppc": _symmetrise_ppc,
-    "pli": _symmetrise_pli,
-    "pli2_unbiased": _symmetrise_pli,
-    "dpli": _symmetrise_dpli,
-    "wpli": _symmetrise_pli,
-    "wpli2_debiased": _symmetrise_pli,
-    "phase-slope-index": _symmetrise_psi,
-    "SMI": _symmetrise_smi,
-    "wSMI": _symmetrise_smi,
-    "envelope correlation": _symmetrise_envelope_correlation,
+_CAN_FILL_MISSING = {
+    "coh": _transpose_one_diag,
+    "cohy": _transpose_conj_one_diag,
+    "imcoh": _transpose_sign_flip_zero_diag,
+    "plv": _transpose_one_diag,
+    "ciplv": _transpose_zero_diag,
+    "ppc": _transpose_one_diag,
+    "pli": _transpose_zero_diag,
+    "pli2_unbiased": _transpose_zero_diag,
+    "dpli": _fill_dpli,
+    "wpli": _transpose_zero_diag,
+    "wpli2_debiased": _transpose_zero_diag,
+    "phase-slope-index": _transpose_sign_flip_zero_diag,
+    "SMI": _transpose_zero_diag,
+    "wSMI": _transpose_zero_diag,
+    "envelope correlation": _transpose_one_diag,
 }

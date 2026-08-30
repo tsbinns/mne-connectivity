@@ -22,7 +22,7 @@ from mne.utils import _check_option, _validate_type, logger, verbose
 
 from ..base import EpochSpectralConnectivity, SpectralConnectivity
 from ..utils import (
-    _CAN_SYMMETRISE,
+    _CAN_FILL_MISSING,
     _check_multivariate_indices,
     _make_square,
     check_indices,
@@ -730,7 +730,7 @@ def spectral_connectivity_time(
         for m in method:
             this_con = np.moveaxis(conn[m], 0, -1)  # move epochs to last axis
             this_con = _make_square(this_con, "lower", n_good_signals)
-            this_con = _CAN_SYMMETRISE[m](this_con, "lower")
+            this_con = _CAN_FILL_MISSING[m](this_con, "lower")
             this_con = this_con.reshape((-1,) + this_con.shape[2:])
             conn[m] = np.moveaxis(this_con, -1, 0)  # move epochs back to first axis
 

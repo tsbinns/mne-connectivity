@@ -3,6 +3,7 @@
 # License: BSD (3-clause)
 
 import os
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -11,7 +12,7 @@ from mne import create_info, make_fixed_length_epochs
 from mne.annotations import Annotations
 from mne.epochs import BaseEpochs
 from mne.io import RawArray
-from numpy.testing import assert_array_equal
+from numpy.testing import assert_allclose, assert_array_equal
 
 from mne_connectivity import (
     Connectivity,
@@ -23,11 +24,13 @@ from mne_connectivity import (
     SpectroTemporalConnectivity,
     TemporalConnectivity,
     envelope_correlation,
+    phase_slope_index,
+    read_connectivity,
+    spectral_connectivity_epochs,
+    spectral_connectivity_time,
     vector_auto_regression,
+    wsmi,
 )
-from mne_connectivity.effective import phase_slope_index
-from mne_connectivity.io import read_connectivity
-from mne_connectivity.spectral import spectral_connectivity_epochs
 
 
 def _make_test_epochs():
@@ -231,6 +234,89 @@ def test_connectivity_containers(conn_cls, n_components):
             for idx in range(len(dense_shape))
         ]
     )
+
+
+# Time-resolved CIPLV can involve division by zero on diagonal
+@pytest.mark.filterwarnings("ignore:divide by zero encountered in divide")
+@pytest.mark.parametrize("kind", ["epochs", "time"])
+def test_make_spec_conn_full(data_make_full, kind):
+    """Test that filling missing values in spectral conn methods works correctly.
+
+    For some methods, diagonal can be spurious depending on sample size, so we ignore it
+    for those methods.
+    """
+    n_channels = data_make_full.info["nchan"]
+    methods = ("coh", "cohy", "imcoh", "plv", "ciplv", "pli", "wpli")
+    ignore_diag_methods = ("pli", "wpli", "pli2_unbiased", "dpli", "wpli2_debiased")
+
+    # Get spectral coeffs
+    if kind == "epochs":
+        coeffs = data_make_full.compute_psd(method="welch", output="complex")
+        methods += ("ppc", "pli2_unbiased", "dpli", "wpli2_debiased")
+        conn_func = spectral_connectivity_epochs
+    else:  # kind == "time"
+        coeffs = data_make_full.compute_tfr(
+            method="morlet", freqs=np.arange(15, 20), n_cycles=3, output="complex"
+        )
+        ignore_diag_methods += ("ciplv",)  # Can have inf diag
+        conn_func = partial(spectral_connectivity_time, average=True)
+
+    # Compute connectivity
+    lower = conn_func(coeffs, method=methods, indices="lower")
+    upper = conn_func(coeffs, method=methods, indices="upper")
+    indices_all = np.unravel_index(np.arange(n_channels**2), (n_channels, n_channels))
+    full = conn_func(coeffs, method=methods, indices=indices_all)
+
+    # Check results are equivalent
+    for this_lower, this_upper, this_full in zip(lower, upper, full, strict=True):
+        lower_data = this_lower.get_data()
+        upper_data = this_upper.get_data()
+        full_data = this_full.get_data("dense")
+        assert_allclose(lower_data, upper_data, atol=1e-6)
+        if this_lower.method in ignore_diag_methods:
+            lower_data[np.diag_indices(n_channels)] = 0.0
+            full_data[np.diag_indices(n_channels)] = 0.0
+        assert_allclose(lower_data, full_data, atol=1e-6)
+
+
+@pytest.mark.parametrize("kind", ["epochs", "time"])
+def test_make_psi_full(data_make_full, kind):
+    """Test that filling missing values in PSI data works correctly."""
+    n_channels = data_make_full.info["nchan"]
+
+    # Get spectral coeffs
+    if kind == "epochs":
+        coeffs = data_make_full.compute_psd(method="welch", output="complex")
+    else:  # kind == "time"
+        coeffs = data_make_full.compute_tfr(
+            method="morlet", freqs=np.arange(15, 20), n_cycles=3, output="complex"
+        )
+
+    # Compute connectivity
+    lower = phase_slope_index(coeffs, indices="lower")
+    upper = phase_slope_index(coeffs, indices="upper")
+    indices_all = np.unravel_index(np.arange(n_channels**2), (n_channels, n_channels))
+    full = phase_slope_index(coeffs, indices=indices_all)
+
+    # Check results are equivalent
+    assert_allclose(lower.get_data(), upper.get_data(), atol=1e-6)
+    assert_allclose(lower.get_data(), full.get_data("dense"), atol=1e-6)
+
+
+@pytest.mark.parametrize("weighted", [True, False])
+def test_make_smi_full(data_make_full, weighted):
+    """Test that filling missing values in SMI data works correctly."""
+    n_channels = data_make_full.info["nchan"]
+
+    # Compute connectivity
+    lower = wsmi(data_make_full, kernel=3, tau=1, indices="lower", weighted=weighted)
+    upper = wsmi(data_make_full, kernel=3, tau=1, indices="upper", weighted=weighted)
+    indices_all = np.unravel_index(np.arange(n_channels**2), (n_channels, n_channels))
+    full = wsmi(data_make_full, kernel=3, tau=1, indices=indices_all, weighted=weighted)
+
+    # Check results are equivalent
+    assert_allclose(lower.get_data(), upper.get_data(), atol=1e-6)
+    assert_allclose(lower.get_data(), full.get_data("dense"), atol=1e-6)
 
 
 def test_get_multivariate_data():

@@ -39,7 +39,7 @@ from mne.utils import (
 
 from ..base import SpectralConnectivity, SpectroTemporalConnectivity
 from ..utils import (
-    _CAN_SYMMETRISE,
+    _CAN_FILL_MISSING,
     _check_multivariate_indices,
     _make_square,
     check_indices,
@@ -1532,7 +1532,7 @@ def spectral_connectivity_epochs(
     if indices == "all":
         for method_idx in range(n_methods):
             this_con = _make_square(con[method_idx], "lower", n_good_signals)
-            this_con = _CAN_SYMMETRISE[method[method_idx]](this_con, "lower")
+            this_con = _CAN_FILL_MISSING[method[method_idx]](this_con, "lower")
             con[method_idx] = this_con.reshape((-1,) + this_con.shape[2:])
 
     # Fill entries for bad channels
