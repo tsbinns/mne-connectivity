@@ -17,7 +17,7 @@ def _get_full_connectivity(data, indices, n_nodes, method, missing):
     if isinstance(indices, tuple):
         indices = tuple(np.asarray(ind) for ind in indices)
         sorted_seeds = np.argsort(indices[0])
-        full_indices = np.indices((n_nodes, n_nodes))
+        full_indices = np.unravel_index(np.arange(n_nodes**2), (n_nodes, n_nodes))
         if not np.array_equal(
             indices[0][sorted_seeds], full_indices[0].ravel()
         ) or not np.array_equal(indices[1][sorted_seeds], full_indices[1].ravel()):
@@ -46,7 +46,7 @@ def _make_square(data, indices, n_nodes, fill=0.0):
     )
 
     if indices == "all":
-        indices = np.indices((n_nodes, n_nodes))
+        indices = np.unravel_index(np.arange(n_nodes**2), (n_nodes, n_nodes))
     elif indices == "lower":
         indices = np.tril_indices(n_nodes, k=-1)
     elif indices == "upper":

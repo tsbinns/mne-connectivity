@@ -1576,7 +1576,9 @@ def spectral_connectivity_epochs(
         con = list()
         for this_con_flat in con_flat:
             if indices == "all":
-                out_indices = np.indices((n_signals, n_signals))
+                out_indices = np.unravel_index(
+                    np.arange(n_signals**2), (n_signals, n_signals)
+                )
             elif indices == "lower":
                 out_indices = np.tril_indices(n_signals, k=-1)
             else:  # "upper"
