@@ -259,7 +259,7 @@ def test_get_multivariate_data():
     assert_array_equal(data, matrix)
 
     # Check that output gets mapped to new space for dense output
-    out = con.get_data(output="dense")
+    out = con.get_data(output="dense", missing=np.nan)
     assert isinstance(out, tuple)  # data and multivariate_nodes expected
     assert len(out) == 2
     matrix, multivariate_nodes = out
@@ -454,19 +454,23 @@ def test_metadata_handling(func, tmpdir, epochs):
         assert metadata.empty
 
 
-@pytest.mark.parametrize("indices", ["all", "symmetric", "tril"])
-def test_get_data_complex(indices):
+@pytest.mark.parametrize("indices", ["all", "lower", "upper"])
+@pytest.mark.parametrize(
+    ["output", "missing"],
+    [["raveled", "raise"], ["dense", "raise"], ["dense", np.nan]],
+)
+def test_get_data_complex(indices, output, missing):
     """Test that get_data works properly with complex data."""
     n_nodes = 3
     data = np.ones((n_nodes * n_nodes), dtype=np.complex128)
-    if indices == "symmetric":
-        triu_inds = np.triu_indices(n_nodes, k=0)
+    if indices == "lower":
+        tril_inds = np.tril_indices(n_nodes, k=-1)
+        data = data[np.ravel_multi_index(tril_inds, (n_nodes, n_nodes))]
+    if indices == "upper":
+        triu_inds = np.triu_indices(n_nodes, k=1)
         data = data[np.ravel_multi_index(triu_inds, (n_nodes, n_nodes))]
-    if indices == "tril":
-        indices = np.tril_indices(n_nodes, k=-1)
-        data = data[np.ravel_multi_index(indices, (n_nodes, n_nodes))]
 
-    conn = Connectivity(data=data, indices=indices, n_nodes=n_nodes)
-    for output in ["raveled", "dense"]:
-        out_data = conn.get_data(output=output)
-        assert np.iscomplexobj(out_data)
+    # use known method so missing values can be filled for dense when default missing
+    conn = Connectivity(data=data, indices=indices, n_nodes=n_nodes, method="coh")
+    out_data = conn.get_data(output=output, missing=missing)
+    assert np.iscomplexobj(out_data)
