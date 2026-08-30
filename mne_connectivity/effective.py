@@ -43,7 +43,7 @@ def phase_slope_index(
 
     The PSI is an effective connectivity measure, i.e., a measure which can give an
     indication of the direction of the information flow (causality). For two time
-    series, and one computes the PSI between the first and the second time series as
+    series, one computes the PSI between the first and the second time series as
     follows::
 
         indices = (np.array([0]), np.array([1]))
@@ -153,7 +153,7 @@ def phase_slope_index(
 
         - ``(n_cons, n_bands)`` for ``'multitaper'`` or ``'fourier'`` modes
         - ``(n_cons, n_bands, n_times)`` for ``'cwt_morlet'`` mode
-        - ``n_cons = n_signals ** 2`` when ``indices=''all''``
+        - ``n_cons = n_signals ** 2`` when ``indices='all'``
         - ``n_cons = len(indices[0])`` when ``indices`` is supplied as a tuple of arrays
         - ``n_bands`` is the number of frequency bands defined by ``fmin`` and ``fmax``
 
@@ -399,7 +399,7 @@ def phase_slope_index_time(
 
         - The epoch dimension is present when ``average=False``, and absent when
           ``average=True``.
-        - ``n_cons = n_signals ** 2`` when ``indices=''all''``
+        - ``n_cons = n_signals ** 2`` when ``indices='all'``
         - ``n_cons = len(indices[0])`` when ``indices`` is supplied as a tuple of arrays
         - ``n_bands`` is the number of frequency bands defined by ``fmin`` and ``fmax``
 
