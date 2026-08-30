@@ -766,24 +766,23 @@ class BaseConnectivity(EpochMixin):
         **Handling missing values for dense outputs**
 
         If ``indices`` is not ``'all'`` and ``output='dense'``, there may be missing
-        values from the full connectivity matrix that need to be filled in. There are
-        four cases to consider:
+        values from the full connectivity matrix that need to be filled in:
 
-        1. When ``indices`` is ``'lower'`` or ``'upper'``, there will be missing values.
-           If ``method`` is a connectivity method available in MNE-Connectivity, and the
-           the missing values can be inferred based on the existing ones, this will be
-           handled automatically.
+        1. When ``indices`` is ``'lower'`` or ``'upper'``, there will be missing values:
 
-        2. When ``indices`` is ``'lower'`` or ``'upper'`` and ``method`` is not
-           recognised by MNE-Connectivity, or it is recognised and the missing values
-           cannot be inferred from the existing ones, the behaviour is determined by the
-           ``missing`` parameter.
+           a. If ``missing`` is not a float (default) and ``method`` is a connectivity
+              method where the missing values can be inferred based on the existing
+              ones, the missing values are filled in automatically.
+           b. If ``missing`` is not a float (default) and ``method`` is not a
+              connectivity method where the missing values can be inferred based on the
+              existing ones, an error is raised.
+           c. If ``missing`` is a float, the missing values are filled in using this.
 
-        3. When ``indices`` is a tuple and ``indices`` represents a subset of the full
+        2. When ``indices`` is a tuple and ``indices`` represents a subset of the full
            connectivity matrix, the missing values will not be inferred, and the
            behaviour is determined by the ``missing`` parameter.
 
-        4. When ``indices`` is a tuple and ``indices`` represents the full connectivity
+        3. When ``indices`` is a tuple and ``indices`` represents the full connectivity
            matrix, there are no missing values to fill in.
 
         **Handling dense outputs for multivariate connectivity**
