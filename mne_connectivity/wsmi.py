@@ -637,7 +637,7 @@ def wsmi(
         metadata=metadata,
     )
     if average:
-        result_connectivity = Connectivity(data=np.nanmean(con, axis=0), **con_kwargs)
+        result_connectivity = Connectivity(data=np.mean(con, axis=0), **con_kwargs)
     else:
         result_connectivity = EpochConnectivity(data=con, **con_kwargs)
 
