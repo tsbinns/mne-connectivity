@@ -59,7 +59,7 @@ def _make_test_epochs():
 
 
 def _prep_correct_connectivity_input(
-    conn_cls, n_nodes=3, symmetric=False, n_epochs=4, indices=None, n_components=0
+    conn_cls, n_nodes=3, tril=False, n_epochs=4, indices=None, n_components=0
 ):
     correct_numpy_shape = []
 
@@ -68,8 +68,8 @@ def _prep_correct_connectivity_input(
         correct_numpy_shape.append(n_epochs)
 
     if indices is None:
-        if symmetric:
-            correct_numpy_shape.append((n_nodes + 1) * n_nodes // 2)
+        if tril:
+            correct_numpy_shape.append((n_nodes - 1) * n_nodes // 2)
         else:
             correct_numpy_shape.append(n_nodes**2)
     else:
@@ -131,7 +131,7 @@ def test_connectivity_containers(conn_cls, n_components):
     correct_numpy_shape, extra_kwargs = _prep_correct_connectivity_input(
         conn_cls,
         n_nodes=n_nodes,
-        symmetric=False,
+        tril=False,
         n_epochs=n_epochs,
         n_components=n_components,
     )
@@ -149,10 +149,13 @@ def test_connectivity_containers(conn_cls, n_components):
         conn_cls(
             data=correct_numpy_input, indices=bad_indices, n_nodes=2, **extra_kwargs
         )
-    with pytest.raises(ValueError, match="Indices can only be"):
+    with pytest.raises(ValueError, match="Invalid value for the 'indices' parameter"):
         conn_cls(data=correct_numpy_input, indices="square", n_nodes=2, **extra_kwargs)
 
-    conn = conn_cls(data=correct_numpy_input, n_nodes=3, **extra_kwargs)
+    # test connectivity instantiation with 'all's
+    conn = conn_cls(data=correct_numpy_input, n_nodes=3, indices="all", **extra_kwargs)
+    with pytest.raises(ValueError, match="If `indices` is 'all'"):
+        conn_cls(data=correct_numpy_input, n_nodes=2, indices="all", **extra_kwargs)
 
     # test that get_data works as intended
     with pytest.raises(ValueError, match="Invalid value for the 'output' parameter"):
@@ -187,7 +190,7 @@ def test_connectivity_containers(conn_cls, n_components):
     # test connectivity instantiation with indices
     indices = ([0, 1], [1, 0])
     indexed_numpy_shape, index_kwargs = _prep_correct_connectivity_input(
-        conn_cls, n_nodes=n_nodes, symmetric=False, n_epochs=n_epochs, indices=indices
+        conn_cls, n_nodes=n_nodes, tril=False, n_epochs=n_epochs, indices=indices
     )
     indexed_numpy_input = np.ones(indexed_numpy_shape)
     conn2 = conn_cls(
@@ -205,23 +208,44 @@ def test_connectivity_containers(conn_cls, n_components):
     with pytest.raises(ValueError, match="The number of indices"):
         conn_cls(data=correct_numpy_input, n_nodes=3, indices=indices, **extra_kwargs)
 
-    # test symmetric input
+    # test lower-/upper-triangular input
     correct_numpy_shape, extra_kwargs = _prep_correct_connectivity_input(
-        conn_cls, n_nodes=3, symmetric=True
+        conn_cls, n_nodes=3, tril=True
     )
     correct_numpy_input = np.ones(correct_numpy_shape)
 
-    with pytest.raises(ValueError, match='If "indices" is "symmetric"'):
-        conn_cls(
-            data=correct_numpy_input, n_nodes=2, indices="symmetric", **extra_kwargs
+    for indices in ["lower", "upper"]:
+        with pytest.raises(ValueError, match="If `indices` is 'lower' or 'upper'"):
+            conn_cls(
+                data=correct_numpy_input, n_nodes=2, indices=indices, **extra_kwargs
+            )
+        tri_conn = conn_cls(
+            data=correct_numpy_input,
+            n_nodes=n_nodes,
+            indices=indices,
+            method="coh",  # use a method where we can auto-fill missing values
+            **extra_kwargs,
         )
-    symm_conn = conn_cls(
-        data=correct_numpy_input, n_nodes=n_nodes, indices="symmetric", **extra_kwargs
-    )
-    assert symm_conn.n_nodes == n_nodes
+        assert tri_conn.n_nodes == n_nodes
+
+        # test that conversion to dense maps properly
+        dense_out = tri_conn.get_data(missing=np.nan)
+        if conn_cls.is_epoched:
+            dense_out = np.moveaxis(dense_out, 0, -1)  # move epochs for indexing
+            correct_numpy_input = np.moveaxis(correct_numpy_input, 0, -1)
+        tril_inds = np.tril_indices(n_nodes, k=-1)
+        triu_inds = np.triu_indices(n_nodes, k=1)
+        if indices == "lower":
+            assert_array_equal(dense_out[tril_inds], correct_numpy_input)
+            assert_array_equal(dense_out[triu_inds], np.nan)
+        else:
+            assert_array_equal(dense_out[triu_inds], correct_numpy_input)
+            assert_array_equal(dense_out[tril_inds], np.nan)
+        if conn_cls.is_epoched:
+            correct_numpy_input = np.moveaxis(correct_numpy_input, -1, 0)
 
     # raveled shape should be the same
-    assert_array_equal(symm_conn.get_data(output="raveled").shape, correct_numpy_shape)
+    assert_array_equal(tri_conn.get_data(output="raveled").shape, correct_numpy_shape)
 
     # should be ([n_epochs], n_nodes, n_nodes, ...) dense shape
     dense_shape = []
@@ -230,10 +254,48 @@ def test_connectivity_containers(conn_cls, n_components):
     dense_shape.extend([n_nodes, n_nodes])
     assert all(
         [
-            symm_conn.get_data(output="dense").shape[idx] == dense_shape[idx]
+            tri_conn.get_data(output="dense").shape[idx] == dense_shape[idx]
             for idx in range(len(dense_shape))
         ]
     )
+
+
+@pytest.mark.parametrize("indices", ["lower", "upper"])
+def test_make_unknown_method_full(indices):
+    """Test that filling missing values in unknown methods errors."""
+    n_nodes = 3
+    correct_numpy_shape, extra_kwargs = _prep_correct_connectivity_input(
+        Connectivity, n_nodes=n_nodes, tril=True
+    )
+    correct_numpy_input = np.ones(correct_numpy_shape)
+    con = Connectivity(
+        data=correct_numpy_input, n_nodes=n_nodes, indices=indices, **extra_kwargs
+    )
+
+    with pytest.raises(ValueError, match="Cannot fill missing values for connectivity"):
+        con.get_data()
+
+
+def test_make_full_with_indices():
+    """Test filling missing values in connectivity data with tuple indices."""
+    n_nodes = 3
+    correct_numpy_input = np.arange(n_nodes**2)
+
+    # Check that connectivity data with explicit all-to-all indices works
+    indices = np.unravel_index(np.arange(n_nodes**2), (n_nodes, n_nodes))
+    con_ind = Connectivity(data=correct_numpy_input, n_nodes=n_nodes, indices=indices)
+    con_all = Connectivity(data=correct_numpy_input, n_nodes=n_nodes, indices="all")
+    assert_array_equal(con_ind.get_data("dense"), con_all.get_data())
+
+    # Check that non-all-to-all indices errors when trying to fill missing values
+    non_all_indices = ([0, 1], [1, 0])
+    con_non_all = Connectivity(
+        data=np.arange(len(non_all_indices[0])),
+        n_nodes=n_nodes,
+        indices=non_all_indices,
+    )
+    with pytest.raises(ValueError, match="Cannot fill missing values for connectivity"):
+        con_non_all.get_data("dense")
 
 
 # Time-resolved CIPLV can involve division by zero on diagonal
