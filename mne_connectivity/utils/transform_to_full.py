@@ -16,11 +16,8 @@ def _get_full_connectivity(data, indices, n_nodes, method, missing):
         return _make_square(data, indices, n_nodes)
     if isinstance(indices, tuple):
         indices = tuple(np.asarray(ind) for ind in indices)
-        sorted_seeds = np.argsort(indices[0])
         full_indices = np.unravel_index(np.arange(n_nodes**2), (n_nodes, n_nodes))
-        if not np.array_equal(
-            indices[0][sorted_seeds], full_indices[0].ravel()
-        ) or not np.array_equal(indices[1][sorted_seeds], full_indices[1].ravel()):
+        if not np.array_equal(indices, full_indices):
             raise ValueError(
                 "Cannot fill missing values for connectivity data when indices are "
                 "specified as a tuple that does not represent the full connectivity "
