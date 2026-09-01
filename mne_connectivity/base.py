@@ -402,8 +402,10 @@ class BaseConnectivity(EpochMixin):
     connectivity computing functions.
 
     Connectivity data is anything that represents "connections" between nodes as a
-    ``(N, N)`` array. It can be symmetric, or asymmetric (if it is symmetric, storage
-    optimization will occur).
+    ``(N, N)`` array. It can be symmetric, or asymmetric. If it is symmetric (or
+    asymmetric, but the missing (e.g., upper-triangular) elements can be determined
+    based on the existing (e.g., lower-triangular) elements), we can optimise memory
+    demand for storage.
 
     Parameters
     ----------
@@ -422,23 +424,26 @@ class BaseConnectivity(EpochMixin):
     Notes
     -----
     Connectivity data can be generally represented as a square matrix with values
-    intending the connectivity function value between two nodes. We optimize storage of
-    symmetric connectivity data and allow support for computing connectivity data on a
-    subset of nodes. We store connectivity data as a raveled ``(n_estimated_nodes,
-    ...)`` where ``n_estimated_nodes`` can be ``n_nodes_in * n_nodes_out`` if a full
-    connectivity structure is computed, or a subset of the nodes (equal to the length of
-    the indices passed in).
+    intending the connectivity function value between two nodes. We store connectivity
+    data as a raveled ``(n_estimated_nodes, ...)`` array, where ``n_estimated_nodes``
+    can be ``n_nodes_in * n_nodes_out`` if a full connectivity structure is computed, or
+    a subset of the nodes (equal to the length of the indices passed in).
 
     Since we store connectivity data as a raveled array, one can easily optimize the
-    storage of "symmetric" connectivity data. One can use numpy to convert a full
-    all-to-all connectivity into an upper triangular portion, and set
-    ``indices='symmetric'``. This would reduce the RAM needed in half.
+    storage of "symmetric" connectivity data by storing only the lower-triangular (or
+    upper-triangular) elements, and filling these in when the user requests the full
+    connectivity matrix. How to fill in the missing values is determined based on the
+    ``method`` parameter.
 
     The underlying data structure is an :class:`xarray.DataArray`, with a similar API to
     ``xarray``. We provide support for storing connectivity data in a subset of nodes.
     Thus the underlying data structure instead of a ``(n_nodes_in, n_nodes_out)`` 2D
     array would be a ``(n_nodes_in * n_nodes_out,)`` raveled 1D array. This allows us to
-    optimize storage also for symmetric connectivity.
+    optimize storage also for "symmetric" connectivity.
+
+    Storage optimisation will not occur for multivariate connectivity, as computing
+    connectivity in the same lower-/upper-triangular manner for "symmetric" methods does
+    not transfer.
     """
 
     # whether or not the connectivity occurs over epochs
@@ -458,7 +463,7 @@ class BaseConnectivity(EpochMixin):
     ):
         _validate_type(indices, (str, tuple), "indices")
         if isinstance(indices, str):
-            _check_option("indices", indices, ["all", "lower", "upper"], " as a string")
+            _check_option("indices", indices, ["all", "lower", "upper"], "as a string")
 
         # prepare metadata pandas dataframe and ensure metadata is a Pandas
         # DataFrame object
