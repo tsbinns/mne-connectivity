@@ -435,9 +435,9 @@ def wsmi(
     _check_option("anti_aliasing", anti_aliasing, (True, False, "auto"))
 
     # Check indices
-    _validate_type(indices, (tuple, str), "indices")
+    _validate_type(indices, (tuple, str), "`indices`")
     if isinstance(indices, str):
-        _check_option("indices", indices, ["lower", "upper", "all"], " as a string")
+        _check_option("indices", indices, ["lower", "upper", "all"], "as a string")
 
     # Handle both MNE Epochs and array inputs
     picks = None

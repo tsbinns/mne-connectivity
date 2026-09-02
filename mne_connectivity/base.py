@@ -461,7 +461,7 @@ class BaseConnectivity(EpochMixin):
         metadata=None,
         **kwargs,
     ):
-        _validate_type(indices, (str, tuple), "indices")
+        _validate_type(indices, (str, tuple), "`indices`")
         if isinstance(indices, str):
             _check_option("indices", indices, ["all", "lower", "upper"], "as a string")
 
@@ -823,9 +823,9 @@ class BaseConnectivity(EpochMixin):
         ``[[0, 1], [2, 3], [4, 5]]``.
         """
         _check_option("output", output, ["raveled", "dense", "compact"])
-        _validate_type(missing, (str, "numeric"), "missing")
+        _validate_type(missing, (str, "numeric"), "`missing`")
         if isinstance(missing, str):
-            _check_option("missing", missing, ["raise"], " as a string")
+            _check_option("missing", missing, ["raise"], "as a string")
         else:
             missing = float(missing)
 

@@ -1144,9 +1144,9 @@ def spectral_connectivity_epochs(
         multivariate_con = False
 
     # Check indices
-    _validate_type(indices, (tuple, str), "indices")
+    _validate_type(indices, (tuple, str), "`indices`")
     if isinstance(indices, str):
-        _check_option("indices", indices, ("lower", "upper", "all"), " as a string")
+        _check_option("indices", indices, ("lower", "upper", "all"), "as a string")
     if multivariate_con and not isinstance(indices, tuple):
         raise ValueError(
             "`indices` must be a tuple of array-likes for multivariate connectivity "
