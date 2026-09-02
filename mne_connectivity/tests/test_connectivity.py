@@ -158,9 +158,6 @@ def test_connectivity_containers(conn_cls, n_components):
         conn_cls(data=correct_numpy_input, n_nodes=2, indices="all", **extra_kwargs)
 
     # test that get_data works as intended
-    with pytest.raises(ValueError, match="Invalid value for the 'output' parameter"):
-        conn.get_data(output="blah")
-
     assert conn.shape == tuple(correct_numpy_shape)
     assert conn.get_data(output="raveled").shape == tuple(correct_numpy_shape)
     assert conn.get_data(output="dense").ndim == len(correct_numpy_shape) + 1
@@ -260,6 +257,98 @@ def test_connectivity_containers(conn_cls, n_components):
     )
 
 
+def test_get_multivariate_data():
+    """Test that get_data() works properly with multivariate data."""
+    indices = (
+        np.array([[0, 1], [0, 1], [2, 3]]),
+        np.array([[2, 3], [4, 5], [4, 5]]),
+    )  # should map to upper-triangular elements
+
+    # Find individual channels and nodes (sets of channels) in the data
+    chans, nodes = set(), set()
+    for seed, target in zip(*indices):
+        for ch in seed:
+            chans.add(ch)
+        for ch in target:
+            chans.add(ch)
+        nodes.add(tuple(seed))
+        nodes.add(tuple(target))
+
+    data = np.arange(len(indices[0]), dtype=np.float64)
+    con = Connectivity(data=data, indices=indices, n_nodes=len(chans))
+
+    # Check no manipulation is performed for raveled output
+    matrix = con.get_data(output="raveled")
+    assert isinstance(matrix, np.ndarray)  # just data expected
+    assert_array_equal(data, matrix)
+
+    # Check that output gets mapped to new space for dense output
+    out = con.get_data(output="dense", missing=np.nan)
+    assert isinstance(out, tuple)  # data and multivariate_nodes expected
+    assert len(out) == 2
+    matrix, multivariate_nodes = out
+    assert isinstance(matrix, np.ndarray)
+    assert isinstance(multivariate_nodes, tuple)
+    assert np.all(isinstance(ind, np.ndarray) for ind in multivariate_nodes)
+    assert set(tuple(ind) for ind in multivariate_nodes) == nodes
+    triu_indices = np.triu_indices(len(nodes), k=1)
+    # TODO VERSION: use [*triu_indices] when Py3.10 dropped
+    assert_array_equal(matrix[triu_indices[0], triu_indices[1]], data)
+
+
+def test_get_data_error_catch():
+    """Test that bad calls are caught for get_data()."""
+    n_nodes = 3
+    con = Connectivity(
+        data=np.arange(n_nodes**2),
+        n_nodes=n_nodes,
+        indices="all",
+        method="coh",  # use known method that support filling missing values
+    )
+
+    # Check bad output is caught
+    with pytest.raises(ValueError, match="Invalid value for the 'output' parameter"):
+        con.get_data(output="square")
+
+    # Check bad missing is caught
+    with pytest.raises(
+        TypeError, match="`missing` must be an instance of str or numeric"
+    ):
+        con.get_data(missing=True)
+    with pytest.raises(ValueError, match="Invalid value for the 'missing' parameter"):
+        con.get_data(missing="warn")
+
+    # Check that non-all-to-all indices errors when trying to fill missing values
+    non_all_indices = ([0, 1], [1, 0])
+    con_non_all = Connectivity(
+        data=np.arange(len(non_all_indices[0])),
+        n_nodes=n_nodes,
+        indices=non_all_indices,
+    )
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Cannot fill missing values for connectivity data when indices are "
+            "specified"
+        ),
+    ):
+        con_non_all.get_data("dense")
+
+    # Check that unknown method errors when trying to fill missing values
+    for indices in ["lower", "upper"]:
+        con_bad_meth = Connectivity(
+            data=np.arange(n_nodes * (n_nodes - 1) // 2),
+            n_nodes=n_nodes,
+            indices=indices,
+            method="who_knows",
+        )
+        with pytest.raises(
+            ValueError,
+            match="Cannot fill missing values for connectivity data for the method",
+        ):
+            con_bad_meth.get_data()
+
+
 @pytest.mark.parametrize("indices", ["lower", "upper"])
 def test_make_unknown_method_full(indices):
     """Test that filling missing values in unknown methods errors."""
@@ -286,16 +375,6 @@ def test_make_full_with_indices():
     con_ind = Connectivity(data=correct_numpy_input, n_nodes=n_nodes, indices=indices)
     con_all = Connectivity(data=correct_numpy_input, n_nodes=n_nodes, indices="all")
     assert_array_equal(con_ind.get_data("dense"), con_all.get_data())
-
-    # Check that non-all-to-all indices errors when trying to fill missing values
-    non_all_indices = ([0, 1], [1, 0])
-    con_non_all = Connectivity(
-        data=np.arange(len(non_all_indices[0])),
-        n_nodes=n_nodes,
-        indices=non_all_indices,
-    )
-    with pytest.raises(ValueError, match="Cannot fill missing values for connectivity"):
-        con_non_all.get_data("dense")
 
 
 # Time-resolved CIPLV can involve division by zero on diagonal
@@ -379,44 +458,6 @@ def test_make_smi_full(data_make_full, weighted):
     # Check results are equivalent
     assert_allclose(lower.get_data(), upper.get_data(), atol=1e-6)
     assert_allclose(lower.get_data(), full.get_data("dense"), atol=1e-6)
-
-
-def test_get_multivariate_data():
-    """Test that get_data works properly with multivariate data."""
-    indices = (
-        np.array([[0, 1], [0, 1], [2, 3]]),
-        np.array([[2, 3], [4, 5], [4, 5]]),
-    )  # should map to upper-triangular elements
-
-    # Find individual channels and nodes (sets of channels) in the data
-    chans, nodes = set(), set()
-    for seed, target in zip(*indices):
-        for ch in seed:
-            chans.add(ch)
-        for ch in target:
-            chans.add(ch)
-        nodes.add(tuple(seed))
-        nodes.add(tuple(target))
-
-    data = np.arange(len(indices[0]), dtype=np.float64)
-    con = Connectivity(data=data, indices=indices, n_nodes=len(chans))
-
-    # Check no manipulation is performed for raveled output
-    matrix = con.get_data(output="raveled")
-    assert isinstance(matrix, np.ndarray)  # just data expected
-    assert_array_equal(data, matrix)
-
-    # Check that output gets mapped to new space for dense output
-    out = con.get_data(output="dense", missing=np.nan)
-    assert isinstance(out, tuple)  # data and multivariate_nodes expected
-    assert len(out) == 2
-    matrix, multivariate_nodes = out
-    assert isinstance(matrix, np.ndarray)
-    assert isinstance(multivariate_nodes, tuple)
-    assert np.all(isinstance(ind, np.ndarray) for ind in multivariate_nodes)
-    triu_indices = np.triu_indices(len(nodes), k=1)
-    # TODO VERSION: use [*triu_indices] when Py3.10 dropped
-    assert_array_equal(matrix[triu_indices[0], triu_indices[1]], data)
 
 
 @pytest.mark.parametrize(
