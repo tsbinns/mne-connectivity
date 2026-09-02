@@ -172,6 +172,7 @@ indices : tuple of array_like | ``'lower'`` | ``'upper'`` | ``'all'``
     If ``'upper'``, connectivity represents the upper-triangular part of the
     connectivity matrix.
     If ``'all'``, connectivity represents all connections.
+    Indices for multivarate methods should only be specified as a tuple of arrays.
 """
 
 docdict["freqs"] = """

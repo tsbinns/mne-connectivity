@@ -472,6 +472,19 @@ class BaseConnectivity(EpochMixin):
         self.metadata = metadata
 
         # check the incoming data structure
+        if "components" in kwargs:
+            bad_indices = None
+            if not isinstance(indices, tuple):
+                bad_indices = f"'{indices}'"  # must be a str
+            elif not _check_if_multivariate_indices(indices):
+                bad_indices = "a tuple of non-nested arrays"  # must be non-nested
+            if bad_indices:
+                raise ValueError(
+                    "`components` are present in `kwargs`, which is a term reserved "
+                    "for multivariate connectivity methods. However, `indices` does "
+                    "not match the format for multivariate methods. Expected a tuple "
+                    f"of nested arrays, got {bad_indices}."
+                )
         self._check_data_consistency(data, indices=indices, n_nodes=n_nodes)
         self._prepare_xarray(
             data,
