@@ -102,8 +102,12 @@ Visualization functions
 .. autosummary::
    :toctree: generated/
 
+   plot_connectivity
    plot_sensors_connectivity
    plot_connectivity_circle
+   plot_spectral_connectivity
+   plot_temporal_connectivity
+   plot_spectrotemporal_connectivity
 
 Dataset functions
 =================
