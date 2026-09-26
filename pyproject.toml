@@ -48,6 +48,7 @@ style = [
 ]
 # Dependencies for running tests
 test = [
+  "h5netcdf",
   "joblib",
   "mne-bids",
   "pymatreader",
@@ -106,11 +107,12 @@ full = [
 # We also offer mne-connectivity[full-pyqt6], which will install PyQt6 instead of
 # PySide6.
 full-no-qt = [
+  "h5io >= 0.2.4",
   "h5netcdf",
+  "hdf5",
   "joblib",
   "mne-qt-browser >= 0.6", # released 2023-10-11, will become 0.7 on 2027-04-08
   "numba",
-  "pillow",
   "pyvista >= 0.44", # released 2024-07-07, will become 0.45 on 2027-04-19
   "pyvistaqt >= 0.11", # released 2023-06-30, will become 0.12 on 2028-07-01
   "qtpy",
@@ -123,8 +125,6 @@ full-pyqt6 = [
   "PyQt6-Qt6 != 6.6.0, != 6.7.0",
 ]
 full-pyside6 = ["mne-connectivity[full]"]
-# Dependencies for MNE-Connectivity functions that use HDF5 I/O
-hdf5 = ["h5io >= 0.2.4", "hdf5"]
 
 [project.urls]
 documentation = "https://mne.tools/mne-connectivity"
