@@ -27,6 +27,23 @@ from mne_connectivity.utils import (
 )
 from mne_connectivity.viz import plot_connectivity_circle
 
+# Methods that become a new method once the absolute value is taken
+_ABS_METHOD_RENAME = {"cohy": "coh"}
+# Methods that already are the absolute value, so don't need to be renamed
+_ABS_METHOD_IGNORE = [
+    "coh",
+    "mim",
+    "plv",
+    "ciplv",
+    "pli",
+    "dpli",
+    "wpli",
+    "gc",
+    "gc_tr",
+    "envelope correlation",
+    "SMI",
+]
+
 
 class SpectralMixin:
     """Mixin class for spectral connectivities.
@@ -513,6 +530,17 @@ class BaseConnectivity(EpochMixin):
         r += f", ~{sizeof_fmt(self._size)}"
         r += ">"
         return r
+
+    def __abs__(self):
+        """Take the absolute values of the connectivity data in-place."""
+        self.xarray.values = np.abs(self.xarray.values)
+        if self.method in _ABS_METHOD_RENAME:
+            self.attrs["method"] = _ABS_METHOD_RENAME[self.method]
+            return self
+        if self.method in _ABS_METHOD_IGNORE:
+            return self
+        self.attrs["method"] = f"abs({self.method})"
+        return self
 
     def _get_num_connections(self, data):
         """Compute the number of estimated nodes' connectivity."""

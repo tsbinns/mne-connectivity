@@ -27,7 +27,6 @@ from mne import EvokedArray, make_fixed_length_epochs
 from mne.datasets.fieldtrip_cmc import data_path
 
 from mne_connectivity import (
-    SpectralConnectivity,
     seed_target_indices,
     spectral_connectivity_epochs,
 )
@@ -111,29 +110,14 @@ target_names = [epochs.info["ch_names"][idx] for idx in targets]
 (mic, mim) = spectral_connectivity_epochs(
     epochs, method=["mic", "mim"], indices=multivar_indices, fmin=5, fmax=30, rank=None
 )
-mic = SpectralConnectivity(
-    data=np.abs(mic.get_data()),
-    freqs=mic.freqs,
-    n_nodes=mic.n_nodes,
-    names=mic.names,
-    indices=mic.indices,
-    method=mic.method,
-    patterns=mic.attrs["patterns"],
-)
+abs(mic)  # take the absolute value of the connectivity data, in-place
 
 # bivariate imaginary part of coherency (for comparison)
 bivar_indices = seed_target_indices(seeds, targets)
 imcoh = spectral_connectivity_epochs(
     epochs, method="imcoh", indices=bivar_indices, fmin=5, fmax=30
 )
-imcoh = SpectralConnectivity(
-    data=np.abs(imcoh.get_data()),
-    freqs=imcoh.freqs,
-    n_nodes=imcoh.n_nodes,
-    names=imcoh.names,
-    indices=imcoh.indices,
-    method=imcoh.method,
-)
+abs(imcoh)  # take the absolute value of the connectivity data, in-place
 
 ###############################################################################
 # By averaging across each connection between the seeds and targets, we can see

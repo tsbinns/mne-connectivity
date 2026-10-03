@@ -139,10 +139,8 @@ multivar_indices = ([seeds], [targets])
 
 # Plot CaCoh & MIC
 fig, axis = plt.subplots(1, 1)
-axis.plot(cacoh.freqs, np.abs(cacoh.get_data()[0]), linewidth=2, label="CaCoh")
-axis.plot(
-    mic.freqs, np.abs(mic.get_data()[0]), linewidth=2, label="MIC", linestyle="--"
-)
+axis.plot(cacoh.freqs, abs(cacoh.copy()).get_data()[0], linewidth=2, label="CaCoh")
+axis.plot(mic.freqs, abs(mic).get_data()[0], linewidth=2, label="MIC", linestyle="--")
 axis.set_xlabel("Frequency (Hz)")
 axis.set_ylabel("Connectivity (A.U.)")
 axis.annotate("Non-zero\ntime-lag\ninteraction", xy=(13.5, 0.85))
@@ -267,9 +265,10 @@ axis.legend(loc="upper right", bbox_to_anchor=[1.1, 1.1])
 (coh, imcoh) = spectral_connectivity_epochs(
     data, method=["coh", "imcoh"], indices=bivar_indices, sfreq=100, fmin=3, fmax=35
 )
+abs(imcoh)  # take the absolute value of ImCoh to ignore signs, in-place
 
 coh_mean = np.mean(coh.get_data(), axis=0)
-imcoh_mean = np.mean(np.abs(imcoh.get_data()), axis=0)
+imcoh_mean = np.mean(imcoh.get_data(), axis=0)
 
 coh_mean_subbed = coh_mean - np.mean(coh_mean)
 imcoh_mean_subbed = imcoh_mean - np.mean(imcoh_mean)
@@ -420,10 +419,8 @@ axis.legend(loc="upper right", bbox_to_anchor=[1.1, 1.1])
 
 # Plot CaCoh & MIC
 fig, axis = plt.subplots(1, 1)
-axis.plot(cacoh.freqs, np.abs(cacoh.get_data()[0]), linewidth=2, label="CaCoh")
-axis.plot(
-    mic.freqs, np.abs(mic.get_data()[0]), linewidth=2, label="MIC", linestyle="--"
-)
+axis.plot(cacoh.freqs, abs(cacoh).get_data()[0], linewidth=2, label="CaCoh")
+axis.plot(mic.freqs, abs(mic).get_data()[0], linewidth=2, label="MIC", linestyle="--")
 axis.set_xlabel("Frequency (Hz)")
 axis.set_ylabel("Connectivity (A.U.)")
 axis.annotate("$\\pm$45°\ninteraction", xy=(12.5, 0.9))
@@ -448,9 +445,10 @@ fig.suptitle("CaCoh vs. MIC\n$\\pm$45° & $\\pm$90° interactions")
 (coh, imcoh) = spectral_connectivity_epochs(
     data, method=["coh", "imcoh"], indices=bivar_indices, sfreq=100, fmin=3, fmax=35
 )
+abs(imcoh)
 
 coh_mean = np.mean(coh.get_data(), axis=0)
-imcoh_mean = np.mean(np.abs(imcoh.get_data()), axis=0)
+imcoh_mean = np.mean(imcoh.get_data(), axis=0)
 
 coh_mean_subbed = coh_mean - np.mean(coh_mean)
 imcoh_mean_subbed = imcoh_mean - np.mean(imcoh_mean)

@@ -138,8 +138,9 @@ cacoh = spectral_connectivity_epochs(
 )
 print(f"Results shape: {cacoh.get_data().shape} (connections x frequencies)")
 
-# Get absolute CaCoh
-cacoh_abs = np.abs(cacoh.get_data())[0]
+# Get absolute CaCoh (save a version with complex values for later)
+cacoh_complex = cacoh.get_data()[0]
+cacoh_abs = abs(cacoh).get_data()[0]
 
 ###############################################################################
 # As you can see below, using CaCoh we have summarised the most relevant
@@ -168,7 +169,7 @@ fig.suptitle("CaCoh")
 
 # Plot phase of connectivity
 fig, axis = plt.subplots(1, 1)
-axis.plot(cacoh.freqs, np.angle(cacoh.get_data()[0]), linewidth=2)
+axis.plot(cacoh.freqs, np.angle(cacoh_complex), linewidth=2)
 axis.set_xlabel("Frequency (Hz)")
 axis.set_ylabel("Phase of connectivity (radians)")
 fig.suptitle("CaCoh")
@@ -361,10 +362,10 @@ cacoh_red = spectral_connectivity_epochs(
 
 # compare standard and rank subspace-projected CaCoh
 fig, axis = plt.subplots(1, 1)
-axis.plot(cacoh.freqs, np.abs(cacoh.get_data()[0]), linewidth=2, label="standard CaCoh")
+axis.plot(cacoh.freqs, cacoh_abs, linewidth=2, label="standard CaCoh")
 axis.plot(
     cacoh_red.freqs,
-    np.abs(cacoh_red.get_data()[0]),
+    abs(cacoh_red).get_data()[0],
     linewidth=2,
     label="rank subspace (2) CaCoh",
 )
