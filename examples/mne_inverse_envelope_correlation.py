@@ -118,8 +118,7 @@ def bp_gen(label_ts):
 
 
 corr_obj = envelope_correlation(bp_gen(label_ts), orthogonalize="pairwise")
-corr = corr_obj.combine()
-corr = corr.get_data(output="dense")[:, :, 0]
+corr = corr_obj.combine().get_data(output="dense")
 
 
 def plot_corr(corr, title):
@@ -177,11 +176,12 @@ corr_obj = envelope_correlation(  # already orthogonalized earlier
 # average over epochs, take absolute value, and plot
 corr = corr_obj.combine()
 corr = abs(corr)
-corr = corr.get_data(output="dense")[:, :, 0]
+corr = corr.get_data(output="dense")
 corr.flat[:: corr.shape[0] + 1] = 0  # zero out the diagonal
 
 plot_corr(corr, "Symmetric")
 plot_degree(corr, "Beta (symmetric, aparc.a2009s)")
+
 # %%
 # References
 # ----------
