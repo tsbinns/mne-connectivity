@@ -219,13 +219,13 @@ con_coh_0_29 = spectral_connectivity_epochs(
 ax = plt.subplot(111)
 ax.plot(
     con_cacoh_0_29_func.freqs,
-    np.abs(con_cacoh_0_29_func.get_data()[0]),
+    abs(con_cacoh_0_29_func).get_data()[0],
     label="CaCoh (spec_conn\nfunction)",
 )
 ax.plot(con_coh_0_29.freqs, np.mean(con_coh_0_29.get_data(), axis=0), label="Coh")
 ax.plot(
     con_cacoh_0_29_class.freqs,
-    np.abs(con_cacoh_0_29_class.get_data()[0]),
+    abs(con_cacoh_0_29_class).get_data()[0],
     label="CaCoh (decomposition\nclass)",
 )
 ax.axvspan(FMIN, FMAX, color="grey", alpha=0.2, label="Fitted freq. band")
@@ -333,13 +333,13 @@ con_coh_30_60 = spectral_connectivity_epochs(
 ax = plt.subplot(111)
 ax.plot(
     con_cacoh_30_60_func.freqs,
-    np.abs(con_cacoh_30_60_func.get_data()[0]),
+    abs(con_cacoh_30_60_func).get_data()[0],
     label="CaCoh (spec_conn\nfunction)",
 )
 ax.plot(con_coh_30_60.freqs, np.mean(con_coh_30_60.get_data(), axis=0), label="Coh")
 ax.plot(
     con_cacoh_30_60_class.freqs,
-    np.abs(con_cacoh_30_60_class.get_data()[0]),
+    abs(con_cacoh_30_60_class).get_data()[0],
     label="CaCoh (decomposition\nclass)",
 )
 ax.axvspan(FMIN, FMAX, color="grey", alpha=0.2, label="Fitted freq. band")

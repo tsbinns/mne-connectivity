@@ -132,7 +132,7 @@ psi_stc = mne.SourceEstimate(
 # Now we can visualize the PSI using the :meth:`~mne.SourceEstimate.plot` method. We use
 # a custom colormap to show signed values.
 
-v_max = np.max(np.abs(psi.get_data()))
+v_max = np.max(abs(psi).get_data())
 brain = psi_stc.plot(
     surface="inflated",
     hemi="lh",

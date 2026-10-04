@@ -108,8 +108,8 @@ indices = np.tril_indices(epochs.info["nchan"], k=-1)  # all unique connections
 pretrial_con = spectral_connectivity_epochs(
     pretrial_coeffs, method="imcoh", indices=indices
 )
-pretrial_con = np.abs(pretrial_con.get_data()).mean(
-    axis=(0, 2)  # average connections and timepoints
+pretrial_con = (
+    abs(pretrial_con).get_data().mean(axis=(0, 2))  # average connections and timepoints
 )
 
 ########################################################################################
@@ -137,7 +137,7 @@ for shuffle_i, surrogate in enumerate(pretrial_surrogates, 1):
         surrogate, method="imcoh", indices=indices, verbose=False
     )
     pretrial_surrogate_con.append(
-        np.abs(surrogate_con.get_data()).mean(axis=(0, 2))
+        abs(surrogate_con).get_data().mean(axis=(0, 2))
     )  # average connections and timepoints
 pretrial_surrogate_con = np.array(pretrial_surrogate_con)
 
@@ -262,8 +262,8 @@ poststim_coeffs = epochs.compute_tfr(tmin=0.0, tmax=None, **tfr_kwargs)
 poststim_con = spectral_connectivity_epochs(
     poststim_coeffs, method="imcoh", indices=indices, verbose=False
 )
-poststim_con = np.abs(poststim_con.get_data()).mean(
-    axis=(0, 2)  # average connections and timepoints
+poststim_con = (
+    abs(poststim_con).get_data().mean(axis=(0, 2))  # average connections and timepoints
 )
 
 # Generate post-stimulus surrogate data
@@ -279,7 +279,7 @@ for shuffle_i, surrogate in enumerate(poststim_surrogates, 1):
         surrogate, method="imcoh", indices=indices, verbose=False
     )
     poststim_surrogate_con.append(
-        np.abs(surrogate_con.get_data()).mean(axis=(0, 2))
+        abs(surrogate_con).get_data().mean(axis=(0, 2))
     )  # average connections and timepoints
 poststim_surrogate_con = np.array(poststim_surrogate_con)
 
@@ -333,7 +333,7 @@ for shuffle_i, surrogate in enumerate(bad_poststim_surrogates, 1):
         surrogate, method="imcoh", indices=indices, verbose=False
     )
     bad_surrogate_con.append(
-        np.abs(surrogate_con.get_data()).mean(axis=(0, 2))
+        abs(surrogate_con).get_data().mean(axis=(0, 2))
     )  # average connections and timepoints
 bad_surrogate_con = np.array(bad_surrogate_con)
 
