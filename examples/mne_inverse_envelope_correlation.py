@@ -40,14 +40,13 @@ pipeline.
 
 import os.path as op
 
-import matplotlib.pyplot as plt
 import mne
 import numpy as np
 from mne.minimum_norm import apply_inverse_epochs, make_inverse_operator
 from mne.preprocessing import compute_proj_ecg, compute_proj_eog
 
 import mne_connectivity
-from mne_connectivity import envelope_correlation
+from mne_connectivity import envelope_correlation, plot_connectivity
 
 data_path = mne.datasets.brainstorm.bst_resting.data_path()
 subjects_dir = op.join(data_path, "subjects")
@@ -118,16 +117,9 @@ def bp_gen(label_ts):
 
 
 corr_obj = envelope_correlation(bp_gen(label_ts), orthogonalize="pairwise")
-corr = corr_obj.combine().get_data(output="dense")
-
-
-def plot_corr(corr, title):
-    fig, ax = plt.subplots(figsize=(4, 4), constrained_layout=True)
-    ax.imshow(corr, cmap="viridis", clim=np.percentile(corr, [5, 95]))
-    fig.suptitle(title)
-
-
-plot_corr(corr, "Pairwise")
+corr = corr_obj.combine()
+vmin, vmax = np.percentile(corr.get_data(), [5, 95])
+plot_connectivity(corr, vmin=vmin, vmax=vmax)
 
 
 def plot_degree(corr, title):
@@ -176,10 +168,9 @@ corr_obj = envelope_correlation(  # already orthogonalized earlier
 # average over epochs, take absolute value, and plot
 corr = corr_obj.combine()
 corr = abs(corr)
-corr = corr.get_data(output="dense")
-corr.flat[:: corr.shape[0] + 1] = 0  # zero out the diagonal
+vmin, vmax = np.percentile(corr.get_data(), [5, 95])
+plot_connectivity(corr, vmin=vmin, vmax=vmax)
 
-plot_corr(corr, "Symmetric")
 plot_degree(corr, "Beta (symmetric, aparc.a2009s)")
 
 # %%
