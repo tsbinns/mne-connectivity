@@ -110,14 +110,12 @@ target_names = [epochs.info["ch_names"][idx] for idx in targets]
 (mic, mim) = spectral_connectivity_epochs(
     epochs, method=["mic", "mim"], indices=multivar_indices, fmin=5, fmax=30, rank=None
 )
-abs(mic)  # take the absolute value of the connectivity data, in-place
 
 # bivariate imaginary part of coherency (for comparison)
 bivar_indices = seed_target_indices(seeds, targets)
 imcoh = spectral_connectivity_epochs(
     epochs, method="imcoh", indices=bivar_indices, fmin=5, fmax=30
 )
-abs(imcoh)  # take the absolute value of the connectivity data, in-place
 
 ###############################################################################
 # By averaging across each connection between the seeds and targets, we can see
@@ -127,7 +125,7 @@ abs(imcoh)  # take the absolute value of the connectivity data, in-place
 
 # %%
 
-plot_spectral_connectivity(imcoh, info=epochs.info, combine="mean", ci=95)
+plot_spectral_connectivity(abs(imcoh), info=epochs.info, combine="mean", ci=95)
 
 ###############################################################################
 # Maximised imaginary part of coherency (MIC)
@@ -165,7 +163,7 @@ plot_spectral_connectivity(imcoh, info=epochs.info, combine="mean", ci=95)
 
 # %%
 
-plot_spectral_connectivity(mic, info=epochs.info)
+plot_spectral_connectivity(abs(mic), info=epochs.info)
 
 ###############################################################################
 # Furthermore, spatial patterns of connectivity can be constructed from the

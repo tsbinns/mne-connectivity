@@ -539,15 +539,19 @@ class BaseConnectivity(EpochMixin):
         return r
 
     def __abs__(self):
-        """Take the absolute values of the connectivity data in-place."""
-        self.xarray.values = np.abs(self.xarray.values)
-        if self.method in _ABS_METHOD_RENAME:
-            self.attrs["method"] = _ABS_METHOD_RENAME[self.method]
-            return self
-        if self.method in _ABS_METHOD_IGNORE:
-            return self
-        self.attrs["method"] = f"abs({self.method})"
-        return self
+        """Return the absolute values of the connectivity data."""
+        conn = self.copy()
+        conn.xarray.values = np.abs(conn.xarray.values)
+
+        if conn.method in _ABS_METHOD_RENAME:
+            conn.attrs["method"] = _ABS_METHOD_RENAME[conn.method]
+            return conn
+
+        if conn.method in _ABS_METHOD_IGNORE:
+            return conn
+
+        conn.attrs["method"] = f"abs({conn.method})"
+        return conn
 
     def _get_num_connections(self, data):
         """Compute the number of estimated nodes' connectivity."""

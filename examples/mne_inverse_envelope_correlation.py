@@ -176,9 +176,9 @@ corr_obj = envelope_correlation(  # already orthogonalized earlier
 
 # average over epochs, take absolute value, and plot
 corr = corr_obj.combine()
+corr = abs(corr)
 corr = corr.get_data(output="dense")[:, :, 0]
 corr.flat[:: corr.shape[0] + 1] = 0  # zero out the diagonal
-corr = np.abs(corr)
 
 plot_corr(corr, "Symmetric")
 plot_degree(corr, "Beta (symmetric, aparc.a2009s)")
