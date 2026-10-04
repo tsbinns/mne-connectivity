@@ -125,6 +125,9 @@ def test_spectral_decomposition(method, mode):
         cwt_freqs=cwt_freqs_con,
         cwt_n_cycles=cwt_n_cycles,
     )
+    con_mv_class = abs(con_mv_class)
+    con_mv_func = abs(con_mv_func)
+    con_bv_func = abs(con_bv_func)
 
     # Frequencies of interest
     freqs = np.array(con_mv_class.freqs)
@@ -137,29 +140,29 @@ def test_spectral_decomposition(method, mode):
 
     # Test selective optimisation of desired freq. band vs. no optimisation
     assert (
-        np.abs(con_mv_class.get_data()[0, freqs_optimise]).mean()
-        > np.abs(con_bv_func.get_data()[:, freqs_optimise]).mean() + optimisation_diff
+        con_mv_class.get_data()[0, freqs_optimise].mean()
+        > con_bv_func.get_data()[:, freqs_optimise].mean() + optimisation_diff
     )  # check connectivity for optimised freq. band higher than without optimisation
     assert_allclose(
-        np.abs(con_mv_class.get_data()[0, freqs_ignore]).mean(),
-        np.abs(con_bv_func.get_data()[:, freqs_ignore]).mean(),
+        con_mv_class.get_data()[0, freqs_ignore].mean(),
+        con_bv_func.get_data()[:, freqs_ignore].mean(),
         atol=similarity_thresh,
     )  # check connectivity for ignored freq. band similar to no optimisation
     assert_allclose(
-        np.abs(con_mv_class.get_data()[1, freqs_optimise]).mean(),
-        np.abs(con_mv_class.get_data()[1, freqs_ignore]).mean(),
+        con_mv_class.get_data()[1, freqs_optimise].mean(),
+        con_mv_class.get_data()[1, freqs_ignore].mean(),
         atol=similarity_thresh,
     )  # check 2nd component connectivity for optimised freq. band similar to ignored
 
     # Test band-wise optimisation similar to bin-wise optimisation
     assert_allclose(
-        np.abs(con_mv_class.get_data()[0, freqs_optimise]).mean(),
-        np.abs(con_mv_func.get_data()[0, freqs_optimise]).mean(),
+        con_mv_class.get_data()[0, freqs_optimise].mean(),
+        con_mv_func.get_data()[0, freqs_optimise].mean(),
         atol=similarity_thresh,
     )  # check connectivity for optimised freq. band similar for both versions
     assert (
-        np.abs(con_mv_class.get_data()[0, freqs_ignore]).mean()
-        < np.abs(con_mv_func.get_data()[0, freqs_ignore]).mean() - optimisation_diff
+        con_mv_class.get_data()[0, freqs_ignore].mean()
+        < con_mv_func.get_data()[0, freqs_ignore].mean() - optimisation_diff
     )  # check connectivity for ignored freq. band lower than with optimisation
 
     # Test `fit_transform` equivalent to `fit` and `transform` separately
@@ -194,14 +197,15 @@ def test_spectral_decomposition(method, mode):
         cwt_freqs=cwt_freqs_con,
         cwt_n_cycles=cwt_n_cycles,
     )
+    con_mv_class_unseen_data = abs(con_mv_class_unseen_data)
     assert_allclose(
-        np.abs(con_mv_class.get_data()[0, freqs_optimise]).mean(),
-        np.abs(con_mv_class_unseen_data.get_data()[0, freqs_optimise]).mean(),
+        con_mv_class.get_data()[0, freqs_optimise].mean(),
+        con_mv_class_unseen_data.get_data()[0, freqs_optimise].mean(),
         atol=similarity_thresh,
     )  # check connectivity for optimised freq. band similarly high for seen & unseen
     assert_allclose(
-        np.abs(con_mv_class.get_data()[0, freqs_ignore]).mean(),
-        np.abs(con_mv_class_unseen_data.get_data()[0, freqs_ignore]).mean(),
+        con_mv_class.get_data()[0, freqs_ignore].mean(),
+        con_mv_class_unseen_data.get_data()[0, freqs_ignore].mean(),
         atol=similarity_thresh,
     )  # check connectivity for optimised freq. band similarly low for seen & unseen
 

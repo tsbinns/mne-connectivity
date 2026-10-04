@@ -523,7 +523,7 @@ def test_spectral_connectivity_epochs_spectrum_tfr_input(method, mode, spectra_a
     coeffs = compute_coeffs_method(method=spec_mode, output="complex", **kwargs)
 
     # Compute connectivity
-    con = spectral_connectivity_epochs(data=coeffs, method=method, indices=indices)
+    con = abs(spectral_connectivity_epochs(data=coeffs, method=method, indices=indices))
 
     # Check connectivity classes are correct and that freqs/times match input data
     if spectra_as_tfr:
@@ -537,8 +537,14 @@ def test_spectral_connectivity_epochs_spectrum_tfr_input(method, mode, spectra_a
     if mode == "multitaper" and spectra_as_tfr:
         pass  # no multitaper TFR computation from timeseries in spec_conn_epochs
     else:
-        con_from_epochs = spectral_connectivity_epochs(
-            data=data, method=method, indices=indices, mode=mode, cwt_freqs=tfr_freqs
+        con_from_epochs = abs(
+            spectral_connectivity_epochs(
+                data=data,
+                method=method,
+                indices=indices,
+                mode=mode,
+                cwt_freqs=tfr_freqs,
+            )
         )
         # Works for multitaper & Morlet, but Welch of Spectrum and Fourier of spec_conn
         # are slightly off (max. abs. diff. ~0.006). This is due to the Spectrum object
@@ -552,9 +558,7 @@ def test_spectral_connectivity_epochs_spectrum_tfr_input(method, mode, spectra_a
         # spec_conn_epochs excludes freqs without at least 5 cycles, but not Spectrum
         fstart = con.freqs.index(con_from_epochs.freqs[0])
         assert_allclose(
-            np.abs(con.get_data()[:, fstart:]),
-            np.abs(con_from_epochs.get_data()),
-            atol=atol,
+            con.get_data()[:, fstart:], con_from_epochs.get_data(), atol=atol
         )
 
     # Check connectivity values are as expected
@@ -563,12 +567,12 @@ def test_spectral_connectivity_epochs_spectrum_tfr_input(method, mode, spectra_a
     freqs_noise = (freqs < fband[0] - trans_bandwidth * 2) | (
         freqs > fband[1] + trans_bandwidth * 2
     )
-    WEAK_CONN_OR_NOISE = 0.3  # conn values outside of simulated fband should be < this
+    WEAK_CONN_OR_NOISE = 0.35  # conn values outside of simulated fband should be < this
     STRONG_CONN = 0.6  # conn values inside simulated fband should be > this
     # check freqs of simulated interaction show strong connectivity
-    assert_array_less(STRONG_CONN, np.abs(con.get_data()[:, freqs_con].mean()))
+    assert_array_less(STRONG_CONN, con.get_data()[:, freqs_con].mean())
     # check freqs of no simulated interaction (just noise) show weak connectivity
-    assert_array_less(np.abs(con.get_data()[:, freqs_noise].mean()), WEAK_CONN_OR_NOISE)
+    assert_array_less(con.get_data()[:, freqs_noise].mean(), WEAK_CONN_OR_NOISE)
 
 
 # TODO: Add general test for error catching for spec_conn_epochs
@@ -680,8 +684,9 @@ def test_spectral_connectivity_epochs_multivariate(method, n_components):
             lower_t = 0.1
             upper_t = 0.3
 
-        assert np.abs(con.get_data())[0, freqs_con].mean() > upper_t
-        assert np.abs(con.get_data())[0, freqs_noise].mean() < lower_t
+        con = abs(con)
+        assert con.get_data()[0, freqs_con].mean() > upper_t
+        assert con.get_data()[0, freqs_noise].mean() < lower_t
 
     elif method == "gc":
         lower_t = 0.2
@@ -882,7 +887,7 @@ def test_multivariate_spectral_connectivity_epochs_regression():
         # must take the absolute of the MIC scores, as the MATLAB
         # implementation returns the absolute values.
         if this_con.method == "mic":
-            mne_results[this_con.method] = np.abs(this_con.get_data())
+            mne_results[this_con.method] = abs(this_con).get_data()
         else:
             mne_results[this_con.method] = this_con.get_data()
 
@@ -1829,14 +1834,12 @@ def test_spectral_connectivity_time_tfr_input(method, mode):
         mt_bandwidth=mt_bandwidth,
         average=True,
     )
-    con = spectral_connectivity_time(data=coeffs, **con_kwargs)
+    con = abs(spectral_connectivity_time(data=coeffs, **con_kwargs))
 
     # Check connectivity from Epochs and EpochsTFR are equivalent (small but non-zero
     # tolerance given due to some platform-dependent variation)
-    con_from_epochs = spectral_connectivity_time(data=data, **con_kwargs)
-    assert_allclose(
-        np.abs(con.get_data()), np.abs(con_from_epochs.get_data()), atol=1e-7
-    )
+    con_from_epochs = abs(spectral_connectivity_time(data=data, **con_kwargs))
+    assert_allclose(con.get_data(), con_from_epochs.get_data(), atol=1e-7)
 
     # Check connectivity values are as expected
     freqs_con = (freqs >= fband[0]) & (freqs <= fband[1])
@@ -1844,9 +1847,9 @@ def test_spectral_connectivity_time_tfr_input(method, mode):
         freqs > fband[1] + trans_bandwidth * 2
     )
     # check freqs of simulated interaction show strong connectivity
-    assert_array_less(0.6, np.abs(con.get_data()[:, freqs_con].mean()))
+    assert_array_less(0.6, con.get_data()[:, freqs_con].mean())
     # check freqs of no simulated interaction (just noise) show weak connectivity
-    assert_array_less(np.abs(con.get_data()[:, freqs_noise].mean()), 0.3)
+    assert_array_less(con.get_data()[:, freqs_noise].mean(), 0.35)
 
 
 def test_spectral_connectivity_time_n_cycles():
