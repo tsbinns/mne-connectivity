@@ -4,6 +4,8 @@
 #
 # License: BSD (3-clause)
 
+from functools import partial
+
 from mne.utils.docs import _indentcount_lines
 
 ##############################################################################
@@ -12,13 +14,50 @@ from mne.utils.docs import _indentcount_lines
 docdict = dict()
 
 # Connectivity
-docdict["data"] = """
-data : array, shape ([epochs,] n_estimated_nodes[, components, freqs, times])
-    The connectivity data that is a raveled array of ``(..., n_estimated_nodes, ...)``
-    shape. The ``n_estimated_nodes`` is equal to ``n_nodes_in * n_nodes_out`` if one has
-    computed the full connectivity, or a subset of nodes equal to the length of the
-    arrays in ``indices`` passed in.
+data_base = """
+data : array, shape {}
+    The connectivity data. ``n_connections`` is equal to ``n_nodes * n_nodes`` if
+    ``indices='all'``, ``n_nodes * (n_nodes - 1) / 2`` if ``indices`` is ``'lower'`` or
+    ``'upper'``, or the length of the arrays in ``indices`` if a tuple of arrays.
 """
+docdict["data_shape_Connectivity"] = "(n_connections,[ n_components])"
+docdict["data_shape_SpectralConnectivity"] = "(n_connections[, n_components], n_freqs)"
+docdict["data_shape_TemporalConnectivity"] = "(n_connections[, n_components], n_times)"
+docdict["data_shape_SpectroTemporalConnectivity"] = (
+    "(n_connections[, n_components], n_freqs, n_times)"
+)
+docdict["data_shape_EpochConnectivity"] = "(n_epochs, n_connections[, n_components])"
+docdict["data_shape_EpochSpectralConnectivity"] = (
+    "(n_epochs, n_connections[, n_components], n_freqs)"
+)
+docdict["data_shape_EpochTemporalConnectivity"] = (
+    "(n_epochs, n_connections[, n_components], n_times)"
+)
+docdict["data_shape_EpochSpectroTemporalConnectivity"] = (
+    "(n_epochs, n_connections[, n_components], n_freqs, n_times)"
+)
+docdict["data_Connectivity"] = data_base.format(docdict["data_shape_Connectivity"])
+docdict["data_SpectralConnectivity"] = data_base.format(
+    docdict["data_shape_SpectralConnectivity"]
+)
+docdict["data_TemporalConnectivity"] = data_base.format(
+    docdict["data_shape_TemporalConnectivity"]
+)
+docdict["data_SpectroTemporalConnectivity"] = data_base.format(
+    docdict["data_shape_SpectroTemporalConnectivity"]
+)
+docdict["data_EpochConnectivity"] = data_base.format(
+    docdict["data_shape_EpochConnectivity"]
+)
+docdict["data_EpochSpectralConnectivity"] = data_base.format(
+    docdict["data_shape_EpochSpectralConnectivity"]
+)
+docdict["data_EpochTemporalConnectivity"] = data_base.format(
+    docdict["data_shape_EpochTemporalConnectivity"]
+)
+docdict["data_EpochSpectroTemporalConnectivity"] = data_base.format(
+    docdict["data_shape_EpochSpectroTemporalConnectivity"]
+)
 
 docdict["names"] = """
 names : array_like | None
@@ -27,14 +66,34 @@ names : array_like | None
     of names, then it must be equal in length to ``n_nodes``.
 """
 
-docdict["indices"] = """
-indices : tuple of array_like | ``'all'`` | ``'symmetric'`` | None
-    The indices of relevant connectivity data. If ``'all'`` (default), then data is
-    connectivity between all nodes. If ``'symmetric'``, then data is symmetric
-    connectivity between all nodes. If a tuple, then contains two array-likes where the
-    first array represents the "in nodes" (seeds), and the second array represents the
-    "out nodes" (targets).
+indices_base = """
+indices : tuple of array_like{other_types}
+    The indices of channels to compute connectivity between. If a tuple, then must
+    contain two array-likes, where the first array represents the channel indices of the
+    seeds, and the second array represents the channel indices of the targets.
+    {multivar_indices}See the notes section for more information.
+    {other_types_description}
+    {default}
 """
+multivar_indices_extra = (
+    "For multivariate methods, the seed and target indices should consist of nested "
+    "arrays containing the channel indices for each multivariate connection. "
+    # Final space is important for formatting!
+)
+indices_with_str = partial(
+    indices_base.format,
+    other_types=" | ``'lower'`` | ``'upper'`` | ``'all'``",
+    other_types_description=(
+        "If ``'lower'``, compute the lower-triangular part of the connectivity matrix. "
+        "If ``'upper'``, compute the upper-triangular part of the connectivity matrix. "
+        "If ``'all'``, compute all connections."
+    ),
+    default="Default is ``'lower'``.",
+)
+docdict["indices_with_str_only_bivar"] = indices_with_str(multivar_indices="")
+docdict["indices_with_str_with_multivar"] = indices_with_str(
+    multivar_indices=multivar_indices_extra
+)
 
 docdict["n_nodes"] = """
 n_nodes : int
@@ -44,10 +103,9 @@ n_nodes : int
 
 docdict["connectivity_kwargs"] = """
 **kwargs : dict
-    Extra connectivity parameters. These may include ``freqs`` for spectral
-    connectivity, ``times`` for connectivity over time, or ``components`` for
-    multivariate connectivity with multiple components per connection. In addition,
-    these may include extra parameters that are stored as xarray ``attrs``.
+    Extra connectivity parameters, like ``components`` for multivariate connectivity
+    with multiple components per connection, or extra parameters to be stored as xarray
+    ``attrs``.
 """
 
 docdict["mode"] = """
@@ -103,7 +161,56 @@ docdict["wpli2_debiased"] = "'wpli2_debiased' : Debiased estimator of squared WP
 docdict["gc"] = "'gc' : State-space Granger Causality (GC)"
 docdict["gc_tr"] = "'gc_tr' : State-space GC on time-reversed signals"
 
+docdict["tri_indices_efficiency_note"] = """
+If connectivity for all possible connections is desired, we can save time and memory by
+only computing and storing the lower- (or upper-) triangular part of the connectivity
+matrix. When the full set of connectivity values is needed, the missing values can be
+inferred based on what has been computed. See the notes section of the
+:meth:`~Connectivity.get_data` method in the connectivity containers for more
+information.
+"""
+
+docdict["tuple_bivar_indices_note"] = """
+If one is only interested in the connectivity between some signals, the ``indices``
+parameter can be specified as a tuple of array-likes. For example, to compute the
+connectivity between the signal with index 0 and the signals with indices 2, 3, and 4 (a
+total of 3 connections) one can use the following::
+
+    indices = (np.array([0, 0, 0]),  # seed indices
+               np.array([2, 3, 4]))  # target indices
+"""
+
+docdict["tuple_multivar_indices_note"] = """
+For multivariate methods, ``indices`` must be specified as a tuple, where the seed and
+target indices for each connection are nested array-likes. For example, to compute the
+connectivity between signals (0, 1) → (2, 3) and (0, 1) → (4, 5), ``indices`` should be
+specified as::
+
+    indices = (np.array([[0, 1], [0, 1]]),  # seeds
+               np.array([[2, 3], [4, 5]]))  # targets
+
+More information on working with multivariate indices and handling connections where the
+number of seeds and targets are not equal can be found in the
+:doc:`../auto_examples/handling_ragged_arrays` example.
+"""
+
 # Downstream container variables
+docdict["indices"] = """
+indices : tuple of array_like | ``'lower'`` | ``'upper'`` | ``'all'``
+    The indices of channels connectivity was computed between.
+    If a tuple, then contains two array-likes, where the first array represents the
+    channel indices of the seeds, and the second array represents the channel indices of
+    the targets.
+    For multivariate methods, the seed and target indices should consist of nested
+    arrays containing the channel indices for each multivariate connection.
+    If ``'lower'``, connectivity represents the lower-triangular part of the
+    connectivity matrix.
+    If ``'upper'``, connectivity represents the upper-triangular part of the
+    connectivity matrix.
+    If ``'all'``, connectivity represents all connections.
+    Indices for multivarate methods should only be specified as a tuple of arrays.
+"""
+
 docdict["freqs"] = """
 freqs : list | array
     The frequencies at which the connectivity data is computed over. If the frequencies
@@ -113,6 +220,11 @@ freqs : list | array
 docdict["times"] = """
 times : list | array
     The times at which the connectivity data is computed over.
+"""
+
+docdict["optional_components_dim"] = """
+``n_components`` is an optional dimension for multivariate methods where each connection
+has multiple components of connectivity.
 """
 
 docdict["method"] = """
@@ -131,19 +243,70 @@ n_epochs_used : int | None
 """
 
 docdict["events"] = """
-events : array of int, shape (n_events, 3)
-    The events typically returned by the read_events function. If some events don't
-    match the events of interest as specified by ``event_id``, they will be marked as
-    'IGNORED' in the drop log.
+events : array of int, shape (n_events, 3) | None
+    The events array. Default is ``None``.
 """
 
 docdict["event_id"] = """
-event_id : int | list of int | dict | None
-    The ID of the event to consider. If a dict, the keys can later be used to access
-    associated events. Example: ``dict(auditory=1, visual=3)``. If an int, a dict will
-    be created with the ID as string. If a list, all events with the IDs specified in
-    the list are used. If ``None``, all events will be used and a dict is created with
-    string integer names corresponding to the event ID integers.
+event_id : dict | None
+    Mapping from condition descriptions (strings) to integer event codes. Default is
+    ``None``.
+"""
+
+# Container methods
+combine_method_base = """
+method : ``'mean'`` | ``'median'`` | callable
+    How to aggregate the data across {}. If `callable`, must take a
+    :class:`NumPy array<numpy.ndarray>` of shape {} as input and return an array
+    collapsed over the {} dimension. Default is ``'mean'``.
+"""
+docdict["combine_method_epochs"] = combine_method_base.format(
+    "epochs", "``(n_epochs, ...)``", "epoch"
+)
+docdict["combine_method_freqs"] = combine_method_base.format(
+    "frequencies", "``(..., n_freqs, ...)``", "frequency"
+)
+docdict["combine_method_times"] = combine_method_base.format(
+    "times", "``(..., n_times)``", "time"
+)
+
+docdict["combine_fmin_fmax"] = """
+fmin, fmax : float | None
+    First and last frequencies to aggregate over, in Hz.  If ``None`` use the first or
+    last frequencies in the data, respectively. Default is ``None``.
+"""
+docdict["combine_tmin_tmax"] = """
+tmin, tmax : float | None
+    First and last times to aggregate over, in seconds.  If ``None`` use the first or
+    last times in the data, respectively. Default is ``None``.
+"""
+
+combine_out_base = """
+con : instance of {}
+    The connectivity data aggregated over the {} dimension. Instance type reflects that
+    of the current connectivity instance, without the {} dimension.
+"""
+docdict["combine_out_epochs"] = combine_out_base.format(
+    "Connectivity or SpectralConnectivity or TemporalConnectivity or SpectroTemporalConnectivity",  # noqa: E501
+    "epoch",
+    "epoch",
+)
+docdict["combine_out_freqs"] = combine_out_base.format(
+    "Connectivity or EpochConnectivity or TemporalConnectivity or EpochTemporalConnectivity",  # noqa: E501
+    "frequency",
+    "frequency",
+)
+docdict["combine_out_times"] = combine_out_base.format(
+    "Connectivity or EpochConnectivity or SpectralConnectivity or EpochSpectralConnectivity",  # noqa: E501
+    "time",
+    "time",
+)
+
+docdict["combine_median_note"] = """
+Passing in ``np.median`` is considered unsafe for complex data. Pass the string
+``"median"`` instead to compute the *marginal* median (i.e., the median of the
+real and imaginary components separately). See discussion here:
+https://github.com/scipy/scipy/pull/12676#issuecomment-783370228
 """
 
 # Verbose
@@ -160,12 +323,14 @@ n_jobs : int
 
 # Random state
 docdict["random_state"] = """
-random_state : None | int | instance of ~numpy.random.RandomState
-    If ``random_state`` is an int, it will be used as a seed for
-    :class:`numpy.random.RandomState`. If ``None``, the seed will be obtained from the
-    operating system (see :class:`numpy.random.RandomState` for details). Default is
-    ``None``.
-"""
+random_state : None | int | instance of ~numpy.random.RandomState | ~numpy.random.Generator
+    Random state used for the default Gaussian noise when ``noise_func`` is
+    ``None``. If ``None`` (default), NumPy's global
+    :class:`numpy.random.RandomState` is used. An int seeds a new
+    :class:`numpy.random.RandomState`. Existing
+    :class:`numpy.random.RandomState` or :class:`numpy.random.Generator`
+    instances are used directly.
+"""  # noqa: E501
 
 # Visualisation
 docdict["viz_info"] = """
@@ -244,14 +409,14 @@ ci : float | ``'sd'`` | ``'range'`` | None
 
 docdict["viz_tmin_tmax"] = """
 tmin, tmax : float | None
-    First and last times to plot, in seconds. If ``None`` take the first/last time
+    First and last times to plot, in seconds. If ``None`` take the first or last time
     in the data, respectively. Default is ``None``.
 """
 
 docdict["viz_fmin_fmax"] = """
 fmin, fmax : float | None
-    First and last frequencies to plot, in Hz. If ``None`` take the first/last frequency
-    in the data, respectively. Default is ``None``.
+    First and last frequencies to plot, in Hz. If ``None`` take the first or last
+    frequency in the data, respectively. Default is ``None``.
 """
 
 docdict["viz_colors_line"] = """
@@ -383,18 +548,38 @@ show : bool
     Whether to show the figure(s). Defaults to ``True``.
 """
 
-docdict["viz_figures"] = """
+viz_figures_base = """
 fig : instance of matplotlib.figure.Figure | list of instance of matplotlib.figure.Figure
-    The figure(s) containing the connectivity plot(s). One figure is returned per
-    channel types in the seeds and targets.
+    The figure(s) containing the connectivity plot(s).{}
 """  # noqa E501
 
-docdict["viz_components_note"] = """
-Plotting for multivariate connectivity is handled by treating each component of the
-multivariate connections as a separate connection. The names of the nodes are
-differentiated by the addition of the component number to the node name, e.g.,
-``'node 0 (0)', 'node 0 (1)', ...``.
+docdict["viz_figures_image"] = viz_figures_base.format(
+    " One figure is returned per connection."
+)
+
+docdict["viz_figures_line"] = viz_figures_base.format(
+    " One figure is returned per channel types in the seeds and targets."
+)
+
+docdict["viz_figures_matrix"] = viz_figures_base.format(
+    " One figure is returned per channel types in the seeds and targets. For "
+    "multivariate connectivity with multiple components, one figure is also returned "
+    "per component."
+)
+
+viz_components_note_base = """
+Plotting for multivariate connectivity with multiple components is handled by treating
+each component of the multivariate connections as a separate connection.{}
 """
+
+docdict["viz_components_extra_con_note"] = viz_components_note_base.format(
+    " The names of the nodes are differentiated by the addition of the component "
+    "number to the node name, e.g., ``'node 0 (0)', 'node 0 (1)', ..., 'node n (m)'``."
+)
+
+docdict["viz_components_extra_fig_note"] = viz_components_note_base.format(
+    " The connections for each component are plotted on a separate figure."
+)
 
 docdict["viz_circle_line_note"] = """
 The circle plot acts as an overview of the channels and their connections in the line

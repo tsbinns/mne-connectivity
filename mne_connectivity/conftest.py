@@ -7,8 +7,23 @@ import os
 import warnings
 from contextlib import contextmanager, suppress
 
+import numpy as np
 import pytest
+from mne import EpochsArray, create_info
 from mne.utils import _check_qt_version
+from packaging.version import Version
+
+
+@pytest.fixture()
+def data_make_full():
+    """Create random data for _make_<method>_full tests."""
+    # Simulate random data
+    rng = np.random.default_rng(42)
+    n_epochs, n_channels, n_times = 4, 3, 50
+    sfreq = 100.0
+    data = rng.standard_normal((n_epochs, n_channels, n_times))
+    info = create_info(ch_names=n_channels, sfreq=sfreq, ch_types="eeg")
+    return EpochsArray(data, info=info)
 
 
 def has_pyvista():
@@ -45,10 +60,6 @@ def has_imageio_ffmpeg():
 
 def pytest_configure(config):
     """Configure pytest options."""
-    # Fixtures
-    for fixture in ("matplotlib_config",):
-        config.addinivalue_line("usefixtures", fixture)
-
     # Cap the number of threads each pytest-xdist worker uses, adapted from SciPy
     if os.getenv("OMP_NUM_THREADS") is None:
         from threadpoolctl import threadpool_limits
@@ -86,6 +97,20 @@ def pytest_configure(config):
         if warning_line and not warning_line.startswith("#"):
             config.addinivalue_line("filterwarnings", warning_line)
 
+    try:
+        import pandas
+    except ImportError:
+        pass
+    else:
+        if Version(pandas.__version__) >= Version("3.1.0.dev0"):
+            # TODO VERSION drop when MNE 1.14 is minimum (gh/mne-python/14446)
+            config.addinivalue_line(
+                "filterwarnings",
+                "ignore:"
+                ".+ is deprecated and will be removed in a future version.*:"
+                "pandas.errors.Pandas4Warning",
+            )
+
 
 @pytest.fixture(autouse=True)
 def close_all():
@@ -96,7 +121,7 @@ def close_all():
     plt.close("all")
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session", autouse=True)
 def matplotlib_config():
     """Configure matplotlib for viz tests."""
     import matplotlib
