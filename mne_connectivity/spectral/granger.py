@@ -1,10 +1,55 @@
 import numpy as np
 from mne.parallel import parallel_func
-from mne.utils import ProgressBar
+from mne.utils import ProgressBar, _check_option, _validate_type, verbose
 
 
-def spectral_granger_causality_epochs():
-    """"""
+@verbose
+@fill_doc
+def spectral_granger_causality_epochs(
+    data,
+    indices,
+    *,
+    method="trgc",
+    return_constituents=False,
+    fmin=None,
+    fmax=None,
+    fdecim=1,
+    tmin=None,
+    tmax=None,
+    n_lags=40,
+    rank=None,
+    n_jobs=1,
+    verbose=None,
+):
+    """Compute frequency- and time-frequency-domain state-space Granger causality.
+
+    Parameters
+    ----------
+    ...
+    method : 'trgc' | 'gc' | 'net_gc'
+    """
+    _check_option("method", method, ["trgc", "gc", "net_gc"])
+
+    if fmin is None:
+        fmin = -np.inf
+    if fmax is None:
+        fmax = np.inf
+    _validate_type(fmin, "numeric", "fmin")
+    _validate_type(fmax, "numeric", "fmax")
+    _validate_type(fdecim, "int", "fdecim")
+    if fdecim < 1:
+        raise ValueError("`fdecim` must be > 0.")
+
+    if tmin is None:
+        tmin = -np.inf
+    if tmax is None:
+        tmax = np.inf
+    _validate_type(tmin, "numeric", "tmin")
+    _validate_type(tmax, "numeric", "tmax")
+
+    _validate_type(n_lags, "int", "n_lags")
+    if n_lags < 1:
+        raise ValueError("`n_lags` must be > 0.")
 
 
 def spectral_granger_causality_time():
