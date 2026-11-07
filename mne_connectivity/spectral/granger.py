@@ -1,6 +1,18 @@
+from functools import partial
+
 import numpy as np
 from mne.parallel import parallel_func
+from mne.time_frequency import (
+    EpochsSpectrum,
+    EpochsSpectrumArray,
+    EpochsTFR,
+    EpochsTFRArray,
+)
 from mne.utils import ProgressBar, _check_option, _validate_type, verbose
+
+from ..utils import fill_doc
+from .epochs import _compute_freq_mask
+from .epochs_multivariate import _check_rank_input
 
 
 @verbose
@@ -8,27 +20,126 @@ from mne.utils import ProgressBar, _check_option, _validate_type, verbose
 def spectral_granger_causality_epochs(
     data,
     indices,
-    *,
     method="trgc",
+    *,
     return_constituents=False,
     fmin=None,
     fmax=None,
     fdecim=1,
     tmin=None,
     tmax=None,
+    tdecim=1,
     n_lags=40,
     rank=None,
     n_jobs=1,
     verbose=None,
 ):
-    """Compute frequency- and time-frequency-domain state-space Granger causality.
+    r"""Compute frequency- and time-frequency-domain state-space Granger causality.
 
     Parameters
     ----------
+    data : ~mne.time_frequency.EpochsSpectrum | ~mne.time_frequency.EpochsTFR
+        The data to compute Granger causality on. Must be complex-valued coefficients.
     ...
-    method : 'trgc' | 'gc' | 'net_gc'
+    method : 'gc' | 'net_gc' | 'trgc'
+        The Granger causality measure to compute:
+        - ``'gc'`` : Granger causality. Represents the directed information flow from
+          seeds to targets.
+        - ``'net_gc'`` : net Granger causality. Represents the net interaction between
+          seeds and targets, without correcting for spurious connectivity estimates.
+        - ``'trgc'`` : time-reversed Granger causality. Like ``'net_gc'``, but with
+          correction for spurious connectivity estimates (default).
+
+        See notes for details.
+    return_constituents : bool
+        Whether or not to additionally return the constituent components of the Granger
+        causality measure requested by ``method`` (defalt False). See notes for details.
+    ...
+    n_lags : int
+        Number of lags to use for the vector autoregressive model. Higher value
+        increase computational cost, but reduce the degree of spectral smoothing in the
+        results. Default 40.
+
+    Returns
+    -------
+    con : instance of SpectralConnectivity or SpectroTemporalConnectivity
+        The computed Granger causality measure. A :class:`SpectralConnectivity` object
+        is returned if ``data`` is an instance of
+        :class:`~mne.time_frequency.EpochsSpectrum`, and a
+        :class:`SpectroTemporalConnectivity` object is returned if ``data`` is an
+        instance of :class:`~mne.time_frequency.EpochsTFR`.
+    constituents : dict
+        A dictionary containing the constituent components of the Granger causality
+        measure as a mapping of method names to connectivity containers, matching the
+        type of ``con``. Only returned if ``return_constituents`` is True.
+
+    Notes
+    -----
+    Spectral state-space Granger causality (``method='gc'``) is calculated as
+
+        :math:`F_{A\to B} = ln\Large{(\frac{\lvert\boldsymbol{S}_{BB}\rvert}{\lvert
+        \boldsymbol{S}_{BB}-\boldsymbol{H}_{BA}\boldsymbol{\Sigma}_{AA
+        \lvert B}\boldsymbol{H}_{BA}^*\rvert}})`
+
+    where: :math:`A` and :math:`B` represent the seeds and targets, respectively;
+    :math:`\boldsymbol{H}` is the spectral transfer function;
+    :math:`\boldsymbol{\Sigma}` is the residuals matrix of the autoregressive model;
+    and :math:`\boldsymbol{S}` is :math:`\boldsymbol{\Sigma}` transformed by
+    :math:`\boldsymbol{H}` :footcite:`BarnettSeth2015`.
+
+    Net Granger causality (``method='net_gc'``) is the difference of Granger scores
+    between directions, :math:`F^{net}_{A\to B} = F_{A\to B} - F_{B\to A}`.
+
+    Time-reversed Granger causality (``method='trgc'``) is a form of net Granger
+    causality corrected for spurious estimates of connectivity arising from correlated
+    noise between signals, e.g., due to source mixing :footcite:`WinklerEtAl2016`. It is
+    defined as :math:`\tilde{D}_{A\to B} = F^{net}_{A\to B} -
+    \tilde{F}^{net}_{\tilde{A}\to \tilde{B}}`, where
+    :math:`\tilde{F}^{net}_{\tilde{A}\to \tilde{B}}` is the net Granger causality of the
+    time-reversed signals. In practice, time-reversal of the signals is achieved by
+    transposing the autocovariance sequence produced from the autoregressive model
+    :footcite:`HaufeEtAl2012`. **Because of its robustness to spurious connectivity
+    estimates, time-reversed Granger causality is the recommended approach.**
+
+    ..versionadded:: 1.0
     """
-    _check_option("method", method, ["trgc", "gc", "net_gc"])
+    _check_option("method", method, ["gc", "net_gc", "trgc"])
+
+    _validate_type(data, [EpochsSpectrum, EpochsTFR], "data")
+    if not np.iscomplexobj(data.get_data()):
+        raise TypeError(
+            "`data` must contain complex-valued Fourier coefficients, such as that "
+            "returned from `Epochs.compute_psd/tfr(..., output='complex')`."
+        )
+    if isinstance(data, EpochsSpectrum):
+        if isinstance(data, EpochsSpectrumArray):  # infer mode from dimensions
+            mode = "multitaper" if "taper" in data._dims else "welch"
+        else:  # read mode from object
+            mode = data.method
+        if mode == "welch" and "segment" not in data._dims:
+            raise ValueError(
+                "`data` for the Welch method must contain unaggregated segments, such "
+                "as that returned from "
+                "`Epochs.compute_psd(method='welch', output='complex', average=None)`."
+            )
+        is_tfr_con = False
+    else:
+        if isinstance(data, EpochsTFRArray):  # infer mode from dimensions
+            mode = "multitaper" if "taper" in data._dims else "morlet"
+        else:  # read mode from object
+            mode = data.method
+        is_tfr_con = True
+    # Extract weights from the EpochsSpectrum/TFR object
+    if not hasattr(data, "weights") or (data.weights is None and mode == "multitaper"):
+        # TODO Version: Only mention re-computing saved objects when mne<1.10 dropped
+        raise AttributeError(
+            "Weights are required for multitaper coefficients stored in "
+            "`EpochsSpectrum` (requires MNE >= 1.8) and `EpochsTFR` (requires MNE >= "
+            "1.10) objects. Objects saved from older versions of MNE will need to be "
+            "recomputed."
+        )
+    if not np.allclose(np.diff(freqs), np.diff(freqs)[0]):
+        raise ValueError("`data` must contain evenly spaced frequencies bins.")
 
     if fmin is None:
         fmin = -np.inf
@@ -46,14 +157,89 @@ def spectral_granger_causality_epochs(
         tmax = np.inf
     _validate_type(tmin, "numeric", "tmin")
     _validate_type(tmax, "numeric", "tmax")
+    _validate_type(tdecim, "int", "tdecim")
+    if tdecim < 1:
+        raise ValueError("`tdecim` must be > 0.")
 
     _validate_type(n_lags, "int", "n_lags")
     if n_lags < 1:
         raise ValueError("`n_lags` must be > 0.")
 
+    rank = _check_rank_input(rank, data, indices)
 
+    data_arr = data.get_data()
+    freqs, times, weights = (data.freqs, data.get("times"), data.weights)
+
+    freq_mask = _compute_freq_mask(freqs, fmin, fmax, fdecim)
+    if not np.any(freq_mask):
+        raise ValueError(
+            f"No frequency bins exist between {fmin} and {fmax} Hz. Increase the "
+            "`fmin`-`fmax` range or increase the frequency resolution of the data."
+        )
+    data_arr = data_arr.take(freq_mask, axis=data._dims.index("freq"))
+    freqs = freqs[freq_mask]
+
+    csd_padding, freqs_padded = _pad_missing_freqs(freqs, data.sfreq)
+
+    time_mask = None
+    if is_tfr_con:
+        time_mask = _compute_freq_mask(times, tmin, tmax, tdecim)
+        if not np.any(time_mask):
+            raise ValueError(
+                f"No time bins exist between {tmin} and {tmax} s. Increase the "
+                "`tmin`-`tmax` range or increase the time resolution of the data."
+            )
+        data_arr = data_arr.take(time_mask, axis=data._dims.index("time"))
+        times = times[time_mask]
+
+    parallel, parallel_gc_single_epoch = parallel_func(
+        _gc_single_epoch, n_jobs, verbose=verbose
+    )
+
+
+@verbose
+@fill_doc
 def spectral_granger_causality_time():
     """"""
+
+
+def _pad_missing_freqs(freqs, sfreq):
+    """Pad missing CSD frequency bins with zeros to fill the 0-Nyquist range."""
+    fstep = np.diff(freqs).mean()
+    nyquist = sfreq / 2
+
+    fmin = freqs[0]
+    fmax = freqs[-1]
+
+    n_missing_start = int(np.round(fmin / fstep))
+    n_missing_end = int(np.round((nyquist - fmax) / fstep))
+
+    csd_padding = partial(
+        np.pad,
+        pad_width=((0, 0), (n_missing_start, n_missing_end), (0, 0), (0, 0)),
+        mode="constant",
+        constant_values=0,
+    )
+    freqs_padded = np.pad(
+        freqs, (n_missing_start, n_missing_end), mode="constant", constant_values=np.nan
+    )
+
+    return csd_padding, freqs_padded
+
+
+def _gc_single_epoch(data, mode, weights):
+    """Compute Granger causality for a single epoch."""
+    # Compute CSD
+    if mode == "welch":
+        data = np.moveaxis(data, 2, 1)  # move segments to taper position
+        weights = np.ones(data.ndim)  # create dummy weights
+    if mode in ["welch", "multitaper"]:
+        weights_sq = (weights * weights.conj()).real
+        data *= weights * np.sqrt(2 / weights_sq.sum(axis=1, keepdims=True))
+    csd = (data * data.conj()).sum(axis=1)  # sum over tapers/segments
+
+    # Compute Granger causality
+    con = _spectral_granger_causality()
 
 
 def _spectral_granger_causality(csd, indices, ranks, freqs, n_lags, sfreq, n_jobs):
@@ -91,27 +277,6 @@ def _spectral_granger_causality(csd, indices, ranks, freqs, n_lags, sfreq, n_job
         )
 
         con_i += 1
-
-
-def _pad_missing_csd_freqs(csd, freqs, sfreq):
-    """Pad missing CSD frequency bins with zeros to fill the 0-Nyquist range."""
-    fstep = np.diff(freqs).mean()
-    nyquist = sfreq / 2
-
-    fmin = freqs[0]
-    fmax = freqs[-1]
-
-    n_missing_start = int(np.round(fmin / fstep))
-    n_missing_end = int(np.round((nyquist - fmax) / fstep))
-
-    csd_padded = np.pad(
-        csd, ((0, 0), (n_missing_start, n_missing_end), (0, 0), (0, 0)), mode="constant"
-    )
-    freqs_padded = np.pad(
-        freqs, (n_missing_start, n_missing_end), mode="constant", constant_values=np.nan
-    )
-
-    return csd_padded, freqs_padded
 
 
 def _project_csd_to_subspace(csd, seed_idcs, seed_rank, target_rank):
