@@ -8,11 +8,12 @@ from mne.time_frequency import (
     EpochsTFR,
     EpochsTFRArray,
 )
-from mne.utils import ProgressBar, _check_option, _validate_type, verbose
+from mne.utils import _check_option, _validate_type, logger, verbose
 
 from ..utils import fill_doc
 from .epochs import _compute_freq_mask
 from .epochs_multivariate import _check_rank_input
+from .smooth import _smooth_spectra
 
 
 @verbose
@@ -138,6 +139,7 @@ def spectral_granger_causality_epochs(
             "1.10) objects. Objects saved from older versions of MNE will need to be "
             "recomputed."
         )
+    freqs = data.freqs
     if not np.allclose(np.diff(freqs), np.diff(freqs)[0]):
         raise ValueError("`data` must contain evenly spaced frequencies bins.")
 
@@ -170,15 +172,13 @@ def spectral_granger_causality_epochs(
     data_arr = data.get_data()
     freqs, times, weights = (data.freqs, data.get("times"), data.weights)
 
-    freq_mask = _compute_freq_mask(freqs, fmin, fmax, fdecim)
-    if not np.any(freq_mask):
+    freq_mask_original = _compute_freq_mask(freqs, fmin, fmax, fdecim)
+    if not np.any(freq_mask_original):
         raise ValueError(
             f"No frequency bins exist between {fmin} and {fmax} Hz. Increase the "
             "`fmin`-`fmax` range or increase the frequency resolution of the data."
         )
-    data_arr = data_arr.take(freq_mask, axis=data._dims.index("freq"))
-    freqs = freqs[freq_mask]
-
+    # Don't apply freq mask until connectivity is computed
     csd_padding, freqs_padded = _pad_missing_freqs(freqs, data.sfreq)
 
     time_mask = None
@@ -192,9 +192,36 @@ def spectral_granger_causality_epochs(
         data_arr = data_arr.take(time_mask, axis=data._dims.index("time"))
         times = times[time_mask]
 
+    # XXX: Go back to parallelising over frequencies in the spectral transfer function
     parallel, parallel_gc_single_epoch = parallel_func(
         _gc_single_epoch, n_jobs, verbose=verbose
     )
+    con_epo, con_tr_epo = parallel(
+        parallel_gc_single_epoch(
+            data_arr[epoch_i],
+            mode,
+            weights,
+            method,
+            indices,
+            csd_padding,
+            ranks,
+            n_lags,
+            smooth_kernel,
+        )
+        for epoch_i in range(data_arr.shape[0])
+    )
+    if accumulate:
+        con += con_epo
+        if con_tr is not None:
+            con_tr += con_tr_epo
+    else:
+        con = np.stack(con_epo, axis=0)
+        if con_tr is not None:
+            con_tr = np.stack(con_tr_epo, axis=0)
+
+    freq_mask_padded = _compute_freq_mask(freqs_padded, fmin, fmax, fdecim)
+    con = con.take(freq_mask_padded, axis=data._dims.index("freq"))
+    freqs = freqs_padded[freq_mask_padded]
 
 
 @verbose
@@ -213,6 +240,12 @@ def _pad_missing_freqs(freqs, sfreq):
 
     n_missing_start = int(np.round(fmin / fstep))
     n_missing_end = int(np.round((nyquist - fmax) / fstep))
+    n_padded_bins = n_missing_start + n_missing_end
+    if n_padded_bins > 0:
+        logger.info(
+            f"Zero padding the spectral data with {n_padded_bins} frequency bins to "
+            "fill the 0 Hz (DC frequency) to Nyquist range."
+        )
 
     csd_padding = partial(
         np.pad,
@@ -227,61 +260,71 @@ def _pad_missing_freqs(freqs, sfreq):
     return csd_padding, freqs_padded
 
 
-def _gc_single_epoch(data, mode, weights):
+def _gc_single_epoch(
+    data, mode, weights, method, indices, csd_padding, ranks, n_lags, smooth_kernel
+):
     """Compute Granger causality for a single epoch."""
     # Compute CSD
     if mode == "welch":
         data = np.moveaxis(data, 2, 1)  # move segments to taper position
-        weights = np.ones(data.ndim)  # create dummy weights
-    if mode in ["welch", "multitaper"]:
+    if weights is not None:
         weights_sq = (weights * weights.conj()).real
         data *= weights * np.sqrt(2 / weights_sq.sum(axis=1, keepdims=True))
     csd = (data * data.conj()).sum(axis=1)  # sum over tapers/segments
+    if smooth_kernel is not None:
+        csd = _smooth_spectra(csd, smooth_kernel)
+    csd = csd_padding(csd)  # zero-pad missing bins to fill 0-Nyquist range
 
     # Compute Granger causality
-    con = _spectral_granger_causality()
+    return _spectral_granger_causality(csd, indices, method, ranks, n_lags)
 
 
-def _spectral_granger_causality(csd, indices, ranks, freqs, n_lags, sfreq, n_jobs):
+def _spectral_granger_causality(csd, indices, method, ranks, n_lags):
     """"""
-    csd_padded, freqs_padded = _pad_missing_csd_freqs(csd, freqs, sfreq)
+    con = np.zeros((len(indices[0]), csd.shape[-2:]))
+    if method == "trgc":
+        time_reversed = [False, True]
+        con_tr = np.zeros_like(con)
+    else:
+        time_reversed = [False]
+        con_tr = None
 
-    time_idcs = np.arange(csd_padded.shape[0])
-    freq_idcs = np.arange(csd_padded.shape[1])
+    # Move times and freqs to first two dimensions for easier indexing
+    csd = np.moveaxis(csd, (0, 1), (-1, -2))
 
     con_i = 0
     for seed_idcs, target_idcs, seed_rank, target_rank in zip(
         indices[0], indices[1], ranks[0], ranks[1]
     ):
-        _log_connection_number(con_i)
-
         seed_idcs = seed_idcs.compressed()
         target_idcs = target_idcs.compressed()
         con_idcs = [*seed_idcs, *target_idcs]
 
-        C = csd_padded[np.ix_(time_idcs, freq_idcs, con_idcs, con_idcs)]
+        C = csd[np.ix_(Ellipsis, Ellipsis, con_idcs, con_idcs)]
 
         C_bar = _project_csd_to_subspace(C, seed_idcs, seed_rank, target_rank)
         con_seeds = np.arange(seed_rank)
         con_targets = np.arange(target_rank) + seed_rank
 
-        autocov = _compute_autocov(C_bar, n_lags)
-        if name == "GC time-reversed":
-            autocov = autocov.transpose(0, 1, 3, 2)
-
-        A_f, V = _autocov_to_full_var(autocov)
-        A, K = _full_var_to_iss(A_f)
-
-        con_scores[con_i] = _iss_to_ugc(
-            A, A_f, K, V, con_seeds, con_targets, freqs_padded, n_steps, n_jobs
-        )
-
+        autocov = _compute_autocov(C_bar, n_lags, freq_res)
+        for is_reversed in time_reversed:
+            if is_reversed:
+                autocov = autocov.transpose(0, 1, 3, 2)
+            A_f, V = _autocov_to_full_var(autocov)
+            A, K = _full_var_to_iss(A_f)
+            con_out = _iss_to_ugc(A, A_f, K, V, con_seeds, con_targets, freq_idcs)
+            if is_reversed:
+                con_tr[con_i] = con_out
+            else:
+                con[con_i] = con_out
         con_i += 1
+
+    return con, con_tr
 
 
 def _project_csd_to_subspace(csd, seed_idcs, seed_rank, target_rank):
     """Project CSD to rank subspace using SVD applied to covariance matrix."""
-    # sum over times and epochs to get cov. from CSD
+    # sum over times and freqs to get cov. from CSD
     cov = csd.sum(axis=(0, 1))
 
     n_seeds = len(seed_idcs)
@@ -474,7 +517,7 @@ def _full_var_to_iss(A_f):
     return A, K
 
 
-def _iss_to_ugc(A, C, K, V, seeds, targets, freqs, n_steps, n_jobs):
+def _iss_to_ugc(A, C, K, V, seeds, targets, freqs):
     """Compute unconditional GC from innovations-form state-space paramseters.
 
     See: Barnett, L. & Seth, A.K., 2015, Physical Review, DOI:
@@ -484,9 +527,9 @@ def _iss_to_ugc(A, C, K, V, seeds, targets, freqs, n_steps, n_jobs):
     freq_inds = np.arange(len(freqs))
 
     # points on a unit circle in the complex plane, one for each frequency
-    z = np.exp(-1j * np.pi * np.linspace(0, 1, len(freqs)))[~np.isnan(freqs)]
+    z = np.exp(-1j * np.pi * np.linspace(0, 1, len(freqs)))
 
-    H = _iss_to_tf(A, C, K, z, n_steps, n_jobs)  # spectral transfer function
+    H = _iss_to_tf(A, C, K, z)  # spectral transfer function
     V_22_1 = np.linalg.cholesky(_partial_covar(V, seeds, targets))
     HV = H @ np.linalg.cholesky(V)
     S = HV @ HV.conj().transpose(0, 1, 3, 2)  # Eq. 6
@@ -498,7 +541,7 @@ def _iss_to_ugc(A, C, K, V, seeds, targets, freqs, n_steps, n_jobs):
     return np.real(np.log(np.linalg.det(S_11)) - np.log(np.linalg.det(S_11 - HVH)))
 
 
-def _iss_to_tf(A, C, K, z, n_steps, n_jobs):
+def _iss_to_tf(A, C, K, z):
     """Compute transfer function for innovations-form state-space params.
 
     In the frequency domain, the back-shift operator, z, is a vector of points on a
@@ -520,15 +563,8 @@ def _iss_to_tf(A, C, K, z, n_steps, n_jobs):
     I_m = np.eye(m)
     H = np.zeros((h, t, n, n), dtype=np.complex128)
 
-    parallel, parallel_compute_transfer_func, _ = parallel_func(
-        _compute_transfer_func, n_jobs, verbose=False
-    )
-    H = np.zeros((h, t, n, n), dtype=np.complex128)
-    for block_i in ProgressBar(range(n_steps), mesg="frequency blocks"):
-        freqs = _get_block_indices(block_i, h, n_jobs)
-        H[freqs] = parallel(
-            parallel_compute_transfer_func(A, C, K, z[k], I_n, I_m) for k in freqs
-        )
+    for k in range(h):
+        H[k] = _compute_transfer_func(A, C, K, z[k], I_n, I_m)
 
     return H
 
