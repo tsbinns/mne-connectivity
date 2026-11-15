@@ -10,6 +10,7 @@ from mne.time_frequency import (
 )
 from mne.utils import _check_option, _validate_type, logger, verbose
 
+from ..base import SpectralConnectivity, SpectroTemporalConnectivity
 from ..utils import fill_doc
 from .epochs import _compute_freq_mask
 from .epochs_multivariate import _check_rank_input
@@ -53,7 +54,8 @@ def spectral_granger_causality_epochs(
         See notes for details.
     return_constituents : bool
         Whether or not to additionally return the constituent components of the Granger
-        causality measure requested by ``method`` (defalt False). See notes for details.
+        causality measure requested by ``method`` (default False). See notes for
+        details.
     ...
     n_lags : int
         Number of lags to use for the vector autoregressive model. Higher value
@@ -216,18 +218,53 @@ def spectral_granger_causality_epochs(
     csd /= data_arr.shape[0]  # average over epochs
     csd = csd_padding(csd)  # zero-pad missing bins to fill 0-Nyquist range
 
-    con, con_tr = _compute_gc(csd, indices, method, rank, n_lags, freq_res)
+    scores, constituents = _compute_gc(
+        csd, indices, method, rank, n_lags, freq_res, return_constituents
+    )
 
     # Mask fmin-fmax range (decimation already applied)
     freq_mask_padded = _compute_freq_mask(freqs_padded, fmin, fmax, 1)
-    con = con.take(freq_mask_padded, axis=data._dims.index("freq"))
+    scores = scores.take(freq_mask_padded, axis=data._dims.index("freq"))
+    for key in constituents.keys():
+        constituents[key] = constituents[key].take(
+            freq_mask_padded, axis=data._dims.index("freq")
+        )
     freqs = freqs_padded[freq_mask_padded]
 
+    # Create connectivity containers
+    container_kwargs = dict(
+        indices=indices,
+        names=data.ch_names,
+        n_nodes=data_arr.shape[1],
+        n_lags=n_lags,
+        freqs=freqs,
+        spec_method=mode,
+        n_epochs_used=data_arr.shape[0],
+        metadata=data.metadata,
+        rank=rank,
+    )
+    if is_tfr_con:
+        con = SpectroTemporalConnectivity(
+            data=scores, method=method, times=times, **container_kwargs
+        )
+    else:
+        con = SpectralConnectivity(data=scores, method=method, **container_kwargs)
+    for constituent_name, constituent_score in constituents.items():
+        if is_tfr_con:
+            constituents[constituent_name] = SpectroTemporalConnectivity(
+                data=constituent_score,
+                method=constituent_name,
+                times=times,
+                **container_kwargs,
+            )
+        else:
+            constituents[constituent_name] = SpectralConnectivity(
+                data=constituent_score, method=constituent_name, **container_kwargs
+            )
 
-@verbose
-@fill_doc
-def spectral_granger_causality_time():
-    """"""
+    if return_constituents:
+        return con, constituents
+    return con
 
 
 def _compute_csd(data, weights, mode):
@@ -274,26 +311,23 @@ def _pad_missing_freqs(freqs, sfreq):
 
 def _compute_gc(csd, method, indices, ranks, n_lags, freq_res, return_constituents):
     """Compute Granger causality for a single epoch."""
-    con_st = np.zeros((len(indices[0]), csd.shape[-2:]))
-    if method == "gc":
-        con_ts = con_st_tr = con_ts_tr = None
-        dir_reversed = time_reversed = [False]
-    elif method == "net_gc":
-        con_ts = np.zeros_like(con_st)
-        con_st_tr = con_ts_tr = None
-        dir_reversed, time_reversed = [False, True], [False]
+    freqs_times_shape = csd.shape[-2:]
+    scores = np.zeros((len(indices[0]), *freqs_times_shape))
+    if return_constituents:
+        constituent_scores = np.zeros_like(scores)
     else:
-        con_ts, con_st_tr, con_ts_tr = (
-            np.zeros_like(con_st),
-            np.zeros_like(con_st),
-            np.zeros_like(con_st),
-        )
-        dir_reversed = time_reversed = [False, True]
+        constituent_scores = np.zeros((1, *freqs_times_shape))
+    constituents = {"gc_ab": np.zeros_like(constituent_scores)}
+    if method in ["net_gc", "trgc"]:
+        constituents["gc_ba"] = np.zeros_like(constituent_scores)
+        if method == "trgc":
+            constituents["gc_ab_tr"] = np.zeros_like(constituent_scores)
+            constituents["gc_ba_tr"] = np.zeros_like(constituent_scores)
 
     # Move times and freqs to first two dimensions for easier indexing
     csd = np.moveaxis(csd, (-1, -2), (0, 1))
 
-    con_i = 0
+    connection_idx, constituent_idx = 0, 0
     for seed_idcs, target_idcs, seed_rank, target_rank in zip(
         indices[0], indices[1], ranks[0], ranks[1]
     ):
@@ -308,22 +342,40 @@ def _compute_gc(csd, method, indices, ranks, n_lags, freq_res, return_constituen
         con_targets = np.arange(target_rank) + seed_rank
 
         autocov = _compute_autocov(C_bar, n_lags, freq_res)
-        for reverse_dir in dir_reversed:
-            for reverse_time in time_reversed:
-                if reverse_time:
-                    autocov = autocov.transpose(0, 1, 3, 2)
-                A_f, V = _autocov_to_full_var(autocov)
-                A, K = _full_var_to_iss(A_f)
-                con_out = _iss_to_ugc(
-                    A, A_f, K, V, con_seeds, con_targets, csd.shape[1]
-                )
-                if reverse_time:
-                    con_tr[con_i] = con_out
-                else:
-                    con[con_i] = con_out
-        con_i += 1
+        for score_name, score_vals in constituents.items():
+            if score_name.startswith("ba"):  # reverse direction
+                con_seeds, con_targets = con_targets, con_seeds
+            if score_name.endswith("_tr"):  # reverse time
+                autocov = autocov.transpose(0, 1, 3, 2)
+            A_f, V = _autocov_to_full_var(autocov)
+            A, K = _full_var_to_iss(A_f)
+            score_vals[constituent_idx] = _iss_to_ugc(
+                A, A_f, K, V, con_seeds, con_targets, csd.shape[1]
+            )
 
-    return con, constituents
+        if method == "gc":
+            scores[connection_idx] = constituents["gc_ab"][constituent_idx]
+        elif method == "net_gc":
+            scores[connection_idx] = (
+                constituents["gc_ab"][constituent_idx]
+                - constituents["gc_ba"][constituent_idx]
+            )
+        elif method == "trgc":
+            scores[connection_idx] = (
+                constituents["gc_ab"][constituent_idx]
+                - constituents["gc_ba"][constituent_idx]
+            ) - (
+                constituents["gc_ab_tr"][constituent_idx]
+                - constituents["gc_ba_tr"][constituent_idx]
+            )
+
+        connection_idx += 1
+        if return_constituents:
+            constituent_idx += 1
+
+    if method == "gc" or not return_constituents:  # plain GC has no constituents
+        return scores, dict()
+    return scores, constituents
 
 
 def _project_csd_to_subspace(csd, seed_idcs, seed_rank, target_rank):
