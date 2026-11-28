@@ -341,13 +341,19 @@ n_jobs : int
     The number of jobs to run in parallel (default 1). Requires the joblib package.
 """
 
-# Random state
-docdict["random_state"] = """
-random_state : int | array-like of int | SeedSequence | BitGenerator | Generator | None
-    Seed passed to :func:`numpy.random.default_rng` to generate the default Gaussian
-    noise when ``noise_func`` is ``None``. If ``None`` (default), a new
-    :class:`numpy.random.Generator` seeded from entropy is used.
+# RNG
+rng_base = """
+rng : int | array-like of int | SeedSequence | BitGenerator | Generator | None
+    Seed passed to :func:`numpy.random.default_rng`. If ``None`` (default), a new
+    :class:`numpy.random.Generator` seeded from entropy is used.{}
+
+    .. version-changed:: 1.0
+       Renamed to ``rng`` from ``{}``.
 """
+docdict["rng"] = rng_base.format("", "rng_seed")
+docdict["rng_simulate"] = rng_base.format(
+    " Only used when ``noise_func`` is ``None``.", "random_state"
+)
 
 # Visualisation
 docdict["viz_info"] = """

@@ -8,7 +8,10 @@ from mne import EpochsArray, create_info
 from mne.filter import filter_data
 from mne.utils import _validate_type
 
+from mne_connectivity.utils import fill_doc
 
+
+@fill_doc
 def make_signals_in_freq_bands(
     n_seeds,
     n_targets,
@@ -25,9 +28,9 @@ def make_signals_in_freq_bands(
     tmin=0.0,
     ch_names=None,
     ch_types="eeg",
-    rng_seed=None,
+    rng=None,
 ):
-    """Simulate signals interacting in a given frequency band.
+    r"""Simulate signals interacting in a given frequency band.
 
     Parameters
     ----------
@@ -88,9 +91,7 @@ def make_signals_in_freq_bands(
         Types of the channels in the simulated data. Must be a recognised data channel
         type (see :term:`mne:data channels`). If specified as a list, must be a
         list of ``n_seeds + n_targets`` channel names.
-    rng_seed : int | array-like of int | SeedSequence | BitGenerator | Generator | None
-        Seed passed to :func:`numpy.random.default_rng`. If ``None`` (default), a new
-        :class:`numpy.random.Generator` seeded from entropy is used.
+    %(rng)s
 
     Returns
     -------
@@ -113,7 +114,7 @@ def make_signals_in_freq_bands(
             duration=2.0,  # 2 second epochs
             tmin=-0.5,  # make first 500 ms a pre-trial period (optional)
             connection_time=(0.0, 0.2),  # burst from 0 to 200 ms
-            window_alpha=0.5,  # isolate burst with 50% cosine-tapered Tukey window
+            window_alpha=0.5,  # isolate burst with 50%% cosine-tapered Tukey window
         )
 
     .. versionadded:: 0.7
@@ -187,7 +188,7 @@ def make_signals_in_freq_bands(
         )
 
     # simulate data
-    rng = np.random.default_rng(rng_seed)
+    rng = np.random.default_rng(rng)
 
     # simulate signal source at desired frequency band
     signal = rng.standard_normal(size=(1, n_epochs * n_times + np.abs(n_delay_times)))
