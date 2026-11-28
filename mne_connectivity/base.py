@@ -7,6 +7,7 @@ import xarray as xr
 from mne.utils import (
     _check_combine,
     _check_event_id,
+    _check_fname,
     _check_option,
     _ensure_events,
     _on_missing,
@@ -16,6 +17,7 @@ from mne.utils import (
     copy_function_doc_to_method_doc,
     object_size,
     sizeof_fmt,
+    verbose,
     warn,
 )
 
@@ -998,7 +1000,9 @@ class BaseConnectivity:
             self.get_data(), node_names=self.names, indices=self.indices, **kwargs
         )
 
-    def save(self, fname):
+    @verbose
+    @fill_doc
+    def save(self, fname, *, overwrite=False, verbose=None):
         """Save connectivity data to disk (in HDF5 format).
 
         Parameters
@@ -1006,6 +1010,9 @@ class BaseConnectivity:
         fname : str | pathlib.Path
             The filepath to save the data. Data is saved as HDF5 files (the ``.h5`` or
             ``.hdf5`` extensions).
+        overwrite : bool
+            Whether to overwrite the file, if it exists (default False).
+        %(verbose)s
 
         See Also
         --------
@@ -1013,6 +1020,9 @@ class BaseConnectivity:
         """
         _soft_import("h5netcdf", "saving connectivity containers")
         check_fname(fname, "connectivity", (".h5", ".hdf5"))
+        fname = _check_fname(
+            fname, overwrite=overwrite, must_exist=False, name=fname, verbose=verbose
+        )
         method = self.method
         indices = self.indices
         n_nodes = self.n_nodes

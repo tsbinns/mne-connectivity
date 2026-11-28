@@ -992,6 +992,27 @@ def test_combine_errors(conn_cls, aggr_dim):
             combine_meth("mean")
 
 
+@pytest.mark.skipif(find_spec("h5netcdf") is None, reason="IO requires h5netcdf")
+def test_save_overwrite(tmp_path):
+    """Test that save overwrites only when requested."""
+    data = np.ones((2**2,))
+    conn = Connectivity(data=data, n_nodes=2)
+    fname = tmp_path / "connectivity.h5"
+
+    # first save to a new path
+    conn.save(fname, verbose=False)
+
+    # saving again requires overwrite
+    with pytest.raises(FileExistsError, match="Destination file exists"):
+        conn.save(fname, overwrite=False, verbose=False)
+
+    # overwrite and read back
+    conn.save(fname, overwrite=True, verbose=False)
+    loaded_conn = read_connectivity(fname)
+
+    assert conn.xarray.equals(loaded_conn.xarray)
+
+
 def test_io_h5netcdf_missing(tmp_path):
     """Test that missing h5netcdf errors when saving/loading."""
     conn = Connectivity(data=np.ones((4,)), n_nodes=2)
@@ -1030,4 +1051,4 @@ def test_io_netcdf_deprecation(tmp_path):
     ):
         loaded_conn = read_connectivity(old_fname)
 
-    assert_array_equal(conn.get_data(), loaded_conn.get_data())
+    assert conn.xarray.equals(loaded_conn.xarray)

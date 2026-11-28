@@ -103,7 +103,7 @@ def test_spectral_connectivity_parallel(method, mode, tmp_path):
         )
 
         tmp_file = tmp_path / "temp_file.h5"
-        con.save(tmp_file)
+        con.save(tmp_file, overwrite=True)
 
         read_con = read_connectivity(tmp_file)
         assert_array_almost_equal(con.get_data(), read_con.get_data())
@@ -2015,7 +2015,7 @@ def test_multivar_save_load(tmp_path):
             fmax=30,
         )
         for this_con in con:
-            this_con.save(tmp_file)
+            this_con.save(tmp_file, overwrite=True)
             read_con = read_connectivity(tmp_file)
             assert_array_almost_equal(this_con.get_data(), read_con.get_data("raveled"))
             if this_con.attrs["patterns"] is not None:
@@ -2056,7 +2056,7 @@ def test_spectral_connectivity_indices_roundtrip_io(tmp_path, method, indices):
     con_time = spectral_connectivity_time(epochs, freqs, method=method, indices=indices)
 
     for con in [con_epochs, con_time]:
-        con.save(tmp_file)
+        con.save(tmp_file, overwrite=True)
         read_con = read_connectivity(tmp_file)
 
         if isinstance(indices, tuple):
@@ -2105,7 +2105,7 @@ def test_multivar_spectral_connectivity_indices_roundtrip_io(tmp_path, method):
     )
 
     for con in [con_epochs, con_time]:
-        con.save(tmp_file)
+        con.save(tmp_file, overwrite=True)
         read_con = read_connectivity(tmp_file)
 
         if indices is not None:
