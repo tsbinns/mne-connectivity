@@ -10,6 +10,7 @@ from mne.utils import (
     _check_option,
     _ensure_events,
     _on_missing,
+    _soft_import,
     _validate_type,
     check_fname,
     copy_function_doc_to_method_doc,
@@ -1010,6 +1011,7 @@ class BaseConnectivity:
         --------
         mne_connectivity.read_connectivity
         """
+        _soft_import("h5netcdf", "saving connectivity containers")
         check_fname(fname, "connectivity", (".h5", ".hdf5"))
         method = self.method
         indices = self.indices

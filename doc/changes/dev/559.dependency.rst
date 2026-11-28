@@ -1,0 +1,1 @@
+Remove ``netCDF4`` as a core dependency, by `Thomas Binns`_.

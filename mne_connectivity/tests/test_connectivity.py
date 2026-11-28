@@ -5,6 +5,8 @@
 import itertools
 import os
 from functools import partial
+from importlib.util import find_spec
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -542,6 +544,7 @@ def test_make_smi_full(data_make_full, weighted):
     assert_allclose(lower.get_data(), full.get_data("dense"), atol=1e-6)
 
 
+@pytest.mark.skipif(find_spec("h5netcdf") is None, reason="IO requires h5netcdf")
 @pytest.mark.parametrize(
     "conn_cls",
     [
@@ -584,6 +587,7 @@ def test_io(conn_cls, tmpdir):
     assert_array_equal(conn.get_data(), new_conn.get_data())
 
 
+@pytest.mark.skipif(find_spec("h5netcdf") is None, reason="IO requires h5netcdf")
 @pytest.mark.parametrize(
     "method_old_new",
     [
@@ -617,6 +621,7 @@ def test_deprecated_method_renaming_io(method_old_new, tmpdir):
     assert new_conn.method == method_new
 
 
+@pytest.mark.skipif(find_spec("h5netcdf") is None, reason="IO requires h5netcdf")
 @pytest.mark.parametrize("dynamic", [True, False])
 @pytest.mark.parametrize("n_lags", [1, 3])
 def test_deprecated_var_io(dynamic, n_lags, tmpdir):
@@ -671,6 +676,7 @@ def test_deprecated_var_io(dynamic, n_lags, tmpdir):
     assert_array_equal(new_conn.lags, np.arange(n_lags))
 
 
+@pytest.mark.skipif(find_spec("h5netcdf") is None, reason="IO requires h5netcdf")
 @pytest.mark.parametrize(
     "conn_cls",
     [
@@ -756,6 +762,7 @@ def test_events_handling(conn_func):
     assert len(conn.events) == n_epochs
 
 
+@pytest.mark.skipif(find_spec("h5netcdf") is None, reason="IO requires h5netcdf")
 @pytest.mark.parametrize(
     "epochs", [_make_test_epochs(), np.random.default_rng(0).random((10, 3, 500))]
 )
@@ -985,6 +992,22 @@ def test_combine_errors(conn_cls, aggr_dim):
             combine_meth("mean")
 
 
+def test_io_h5netcdf_missing(tmp_path):
+    """Test that missing h5netcdf errors when saving/loading."""
+    conn = Connectivity(data=np.ones((4,)), n_nodes=2)
+
+    with patch.dict("sys.modules", {"h5netcdf": None}):
+        with pytest.raises(RuntimeError, match="For saving connectivity containers"):
+            conn.save(tmp_path / "test.h5")
+
+    conn.save(tmp_path / "test.h5")
+
+    with patch.dict("sys.modules", {"h5netcdf": None}):
+        with pytest.raises(RuntimeError, match="For loading connectivity containers"):
+            read_connectivity(tmp_path / "test.h5")
+
+
+@pytest.mark.skipif(find_spec("h5netcdf") is None, reason="IO requires h5netcdf")
 def test_io_netcdf_deprecation(tmp_path):
     """Test IO for deprecated netCDF format."""
     conn = Connectivity(data=np.ones((4,)), n_nodes=2)

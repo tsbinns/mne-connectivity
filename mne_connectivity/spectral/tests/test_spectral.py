@@ -1,5 +1,6 @@
 import os
 import platform
+from importlib.util import find_spec
 
 import numpy as np
 import pandas as pd
@@ -49,6 +50,7 @@ def _stc_gen(data, sfreq, tmin, combo=False):
             yield (arr, stc)
 
 
+@pytest.mark.skipif(find_spec("h5netcdf") is None, reason="IO requires h5netcdf")
 @pytest.mark.parametrize("method", ["coh", "cohy", "imcoh", "plv"])
 @pytest.mark.parametrize("mode", ["multitaper", "fourier", "cwt_morlet"])
 def test_spectral_connectivity_parallel(method, mode, tmp_path):
@@ -1967,6 +1969,7 @@ def test_spectral_connectivity_time_tfr_input_error_catch():
         spectral_connectivity_time(data=data)
 
 
+@pytest.mark.skipif(find_spec("h5netcdf") is None, reason="IO requires h5netcdf")
 def test_save(tmp_path):
     """Test saving results of spectral connectivity."""
     epochs = make_signals_in_freq_bands(
@@ -1986,6 +1989,7 @@ def test_save(tmp_path):
 
 
 # marked with _gc_marks below
+@pytest.mark.skipif(find_spec("h5netcdf") is None, reason="IO requires h5netcdf")
 def test_multivar_save_load(tmp_path):
     """Test saving and loading results of multivariate connectivity."""
     epochs = make_signals_in_freq_bands(
@@ -2025,6 +2029,7 @@ def test_multivar_save_load(tmp_path):
             assert a == b
 
 
+@pytest.mark.skipif(find_spec("h5netcdf") is None, reason="IO requires h5netcdf")
 @pytest.mark.parametrize(
     "method", ["coh", "imcoh", "cohy", "plv", "pli", "wpli", "ciplv"]
 )
@@ -2065,6 +2070,7 @@ def test_spectral_connectivity_indices_roundtrip_io(tmp_path, method, indices):
             assert con.indices == indices and read_con.indices == indices
 
 
+@pytest.mark.skipif(find_spec("h5netcdf") is None, reason="IO requires h5netcdf")
 @pytest.mark.parametrize("method", ["cacoh", "mic", "mim", _gc, _gc_tr])
 def test_multivar_spectral_connectivity_indices_roundtrip_io(tmp_path, method):
     """Test that indices values and type is maintained after saving.

@@ -7,6 +7,7 @@
 
 import os
 import pickle
+from importlib.util import find_spec
 
 import numpy as np
 import pytest
@@ -42,6 +43,7 @@ def _compute_corrs_orig(data):
     return corr
 
 
+@pytest.mark.skipif(find_spec("h5netcdf") is None, reason="IO requires h5netcdf")
 def test_roundtrip_envelope_correlation(tmp_path):
     """Test write/read roundtrip for envelope correlation."""
     rng = np.random.default_rng(0)

@@ -1,6 +1,6 @@
 import numpy as np
 import xarray as xr
-from mne.utils import _prepare_read_metadata, warn
+from mne.utils import _prepare_read_metadata, _soft_import, warn
 
 from .base import (
     Connectivity,
@@ -98,6 +98,7 @@ def read_connectivity(fname):
         Loading netCDF files (``.nc`` extension) was deprecated in favour of HDF5 files
         (``.h5`` or ``.hdf5`` extension).
     """
+    _soft_import("h5netcdf", "loading connectivity containers")
     if str(fname).endswith(".nc"):
         warn(
             "Loading netCDF files (.nc extension) was deprecated in v1.0. To avoid "

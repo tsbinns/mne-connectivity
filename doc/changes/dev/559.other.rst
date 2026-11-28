@@ -1,0 +1,1 @@
+Add a check for ``h5netcdf`` availability in the :meth:`~mne_connectivity.Connectivity.save` method of connectivity containers and in the :func:`~mne_connectivity.read_connectivity` function, by `Thomas Binns`_. 

@@ -1,4 +1,5 @@
 import weakref
+from importlib.util import find_spec
 
 import mne
 import numpy as np
@@ -206,6 +207,7 @@ def test_learn_graph_n_jobs_and_generator():
     assert_allclose(conn_serial.get_data(), conn_generator.get_data())
 
 
+@pytest.mark.skipif(find_spec("h5netcdf") is None, reason="IO requires h5netcdf")
 @pytest.mark.parametrize("indices", ["lower", "upper", "all"])
 def test_learn_graph_roundtrip(tmp_path, indices):
     """Test save/load round-trip of a learn_graph result."""
