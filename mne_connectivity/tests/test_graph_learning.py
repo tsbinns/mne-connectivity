@@ -220,7 +220,7 @@ def test_learn_graph_roundtrip(tmp_path, indices):
     )
 
     conn = learn_graph(X3, indices=indices, verbose=False)
-    fname = tmp_path / "test-graph-connectivity.nc"
+    fname = tmp_path / "test-graph-connectivity.h5"
     conn.save(fname)
     read_conn = read_connectivity(fname)
     assert read_conn.indices == indices

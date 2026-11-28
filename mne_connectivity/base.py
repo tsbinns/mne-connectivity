@@ -11,6 +11,7 @@ from mne.utils import (
     _ensure_events,
     _on_missing,
     _validate_type,
+    check_fname,
     copy_function_doc_to_method_doc,
     object_size,
     sizeof_fmt,
@@ -997,17 +998,19 @@ class BaseConnectivity:
         )
 
     def save(self, fname):
-        """Save connectivity data to disk.
-
-        Can later be loaded using the function
-        :func:`~mne_connectivity.read_connectivity`.
+        """Save connectivity data to disk (in HDF5 format).
 
         Parameters
         ----------
         fname : str | pathlib.Path
-            The filepath to save the data. Data is saved as netCDF files (``.nc``
-            extension).
+            The filepath to save the data. Data is saved as HDF5 files (the ``.h5`` or
+            ``.hdf5`` extensions).
+
+        See Also
+        --------
+        mne_connectivity.read_connectivity
         """
+        check_fname(fname, "connectivity", (".h5", ".hdf5"))
         method = self.method
         indices = self.indices
         n_nodes = self.n_nodes
@@ -1032,16 +1035,10 @@ class BaseConnectivity:
             if val is None:
                 self.attrs[key] = "n/a"
 
-        # save as a netCDF file
-        # note this requires the netcdf4 python library
-        # and h5netcdf library.
-        # The engine specified requires the ability to save
-        # complex data types, which was not natively supported
-        # in xarray. Therefore, h5netcdf is the only engine
-        # to support that feature at this moment.
+        # save as an HDF5 file
         self.xarray.to_netcdf(
             fname, mode="w", format="NETCDF4", engine="h5netcdf", invalid_netcdf=True
-        )
+        )  # The engine specified requires the ability to save complex data types
 
         # re-set old attributes
         self.xarray.attrs = old_attrs

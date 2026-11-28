@@ -75,18 +75,36 @@ def _xarray_to_conn(array, cls_func):
 
 
 def read_connectivity(fname):
-    """Read connectivity data from netCDF file.
+    """Read a connectivity object from disk.
 
     Parameters
     ----------
     fname : str | pathlib.Path
-        The filepath.
+        Path to a connectivity file in HDF5 format, which should end with ``.h5`` or
+        ``.hdf5``.
 
     Returns
     -------
     conn : instance of Connectivity
-        A connectivity class.
+        The loaded connectivity object.
+
+    See Also
+    --------
+    mne_connectivity.Connectivity.save
+
+    Notes
+    -----
+    .. version-changed:: 1.0
+        Loading netCDF files (``.nc`` extension) was deprecated in favour of HDF5 files
+        (``.h5`` or ``.hdf5`` extension).
     """
+    if str(fname).endswith(".nc"):
+        warn(
+            "Loading netCDF files (.nc extension) was deprecated in v1.0. To avoid "
+            "this warning, consider saving this connectivity container in HDF5 format "
+            "(.h5 or .hdf5 extension)."
+        )
+
     # open up a data-array using xarray
     # The engine specified requires the ability to save
     # complex data types, which was not natively supported

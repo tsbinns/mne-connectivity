@@ -570,7 +570,7 @@ def test_io(conn_cls, tmpdir):
     conn = conn_cls(data=correct_numpy_input, n_nodes=n_nodes, **extra_kwargs)
 
     # temporary conn save
-    fname = os.path.join(tmpdir, "connectivity.nc")
+    fname = os.path.join(tmpdir, "connectivity.h5")
     conn.save(fname)
 
     # re-read the file in
@@ -605,13 +605,13 @@ def test_deprecated_method_renaming_io(method_old_new, tmpdir):
     n_nodes = 3
     data = np.ones((n_nodes**2,))
     conn = Connectivity(data=data, n_nodes=n_nodes, method=method_old)
-    conn.save(os.path.join(tmpdir, "connectivity.nc"))
+    conn.save(os.path.join(tmpdir, "connectivity.h5"))
 
     # Read the connectivity container back in
     with pytest.warns(
         RuntimeWarning, match=f"The '{method_old}' method name was deprecated"
     ):
-        new_conn = read_connectivity(os.path.join(tmpdir, "connectivity.nc"))
+        new_conn = read_connectivity(os.path.join(tmpdir, "connectivity.h5"))
 
     # Assert that the method has been renamed
     assert new_conn.method == method_new
@@ -649,7 +649,7 @@ def test_deprecated_var_io(dynamic, n_lags, tmpdir):
     # Save deprecated VAR model
     conn = cls(data=data, n_nodes=n_nodes, method=method, **conn_kwargs)
     conn.xarray.attrs["lags"] = n_lags  # lags were a kwarg, not a dim coordinate
-    conn.save(os.path.join(tmpdir, "connectivity.nc"))
+    conn.save(os.path.join(tmpdir, "connectivity.h5"))
 
     # Read the connectivity container back in
     method_escaped = method.replace("(", r"\(").replace(")", r"\)")
@@ -660,7 +660,7 @@ def test_deprecated_var_io(dynamic, n_lags, tmpdir):
             RuntimeWarning,
             match="Storing VAR models outside of the VARConnectivity",
         ):
-            new_conn = read_connectivity(os.path.join(tmpdir, "connectivity.nc"))
+            new_conn = read_connectivity(os.path.join(tmpdir, "connectivity.h5"))
     assert isinstance(
         new_conn, VARConnectivity if not dynamic else EpochVARConnectivity
     )
@@ -727,7 +727,7 @@ def test_append(conn_cls, has_metadata, tmp_path):
     else:
         assert conn.metadata.empty
 
-    fname = tmp_path / "connectivity.nc"
+    fname = tmp_path / "connectivity.h5"
     conn.save(fname)
     reloaded = read_connectivity(fname)
     assert_array_equal(reloaded.metadata.to_numpy(), conn.metadata.to_numpy())
@@ -795,7 +795,7 @@ def test_metadata_handling(func, tmpdir, epochs):
         assert len(metadata) == len(epochs)
 
     # temporary conn save
-    fname = os.path.join(tmpdir, "connectivity.nc")
+    fname = os.path.join(tmpdir, "connectivity.h5")
     conn.save(fname)
 
     new_conn = read_connectivity(fname)
@@ -983,3 +983,28 @@ def test_combine_errors(conn_cls, aggr_dim):
             match="To ensure the interpretability of the connectivity data",
         ):
             combine_meth("mean")
+
+
+def test_io_netcdf_deprecation(tmp_path):
+    """Test IO for deprecated netCDF format."""
+    conn = Connectivity(data=np.ones((4,)), n_nodes=2)
+
+    # Valid endings: .h5 and .hdf5
+    conn.save(tmp_path / "test.h5")
+    conn.save(tmp_path / "test.hdf5")
+
+    # Invalid endings should warn about MNE naming conventions
+    old_fname = tmp_path / "test.nc"
+    with pytest.warns(
+        RuntimeWarning,
+        match="does not conform to MNE naming conventions.*connectivity",
+    ):
+        conn.save(old_fname)
+
+    # Reading .nc should emit a warning, but successfully restore data
+    with pytest.warns(
+        RuntimeWarning, match=r"Loading netCDF files \(.nc extension\) was deprecated"
+    ):
+        loaded_conn = read_connectivity(old_fname)
+
+    assert_array_equal(conn.get_data(), loaded_conn.get_data())
